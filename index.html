@@ -278,20 +278,29 @@
 
 <script>
 /* ===================== 기준 ===================== */
-const LOW_STOCK_THRESHOLD = 10; // ✅ 10개 미만이면 복사 차단(요청 반영)
+const LOW_STOCK_THRESHOLD = 10;
 
 /* ===================== 시트 ===================== */
 // 발주서
 const ORDER_SHEET_URL_VIEW =
   "https://docs.google.com/spreadsheets/d/1_Bxfag-90U6u-6JbhxNqeoD9vRns-CpPeXPIJYO1Z5o/edit?gid=518656308#gid=518656308";
-const ORDER_CSV_URL =
-  "https://docs.google.com/spreadsheets/d/1_Bxfag-90U6u-6JbhxNqeoD9vRns-CpPeXPIJYO1Z5o/export?format=csv&gid=518656308";
+
+// ✅ 캐시버스터(구글 export CSV 캐시로 갑자기 안 맞는 현상 방지)
+function withCacheBust(url){
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}_=${Date.now()}`;
+}
+const ORDER_CSV_URL = withCacheBust(
+  "https://docs.google.com/spreadsheets/d/1_Bxfag-90U6u-6JbhxNqeoD9vRns-CpPeXPIJYO1Z5o/export?format=csv&gid=518656308"
+);
 
 // 재고 시트
 const STOCK_SHEET_URL_VIEW =
   "https://docs.google.com/spreadsheets/d/1_L12NKkBVU4c5xDPrYLUQRnSUG2NoAwYGWIfPDVO3bM/edit?gid=366983013#gid=366983013";
-const STOCK_CSV_URL =
-  "https://docs.google.com/spreadsheets/d/1_L12NKkBVU4c5xDPrYLUQRnSUG2NoAwYGWIfPDVO3bM/export?format=csv&gid=366983013";
+
+const STOCK_CSV_URL = withCacheBust(
+  "https://docs.google.com/spreadsheets/d/1_L12NKkBVU4c5xDPrYLUQRnSUG2NoAwYGWIfPDVO3bM/export?format=csv&gid=366983013"
+);
 
 document.getElementById("orderLink").href = ORDER_SHEET_URL_VIEW;
 document.getElementById("stockLink").href = STOCK_SHEET_URL_VIEW;
@@ -305,7 +314,6 @@ const EXTRA_COLS = [
 ];
 
 /* ===================== 요청 출력 컬럼 ===================== */
-/* ✅ '상품컬러명(플레이엠디)' 완전 제거 -> '상품명'으로 통일 + '재고' 추가 */
 const OUTPUT_HEADERS = [
   "요청일",
   "수령인","배송수단","운송장 번호","받는분연락처","받는분 기타연락처","주소","배송메세지",
@@ -324,9 +332,6 @@ const TABLE_COLS = [
     .map(h => ({ key:h, label:h }))
 ];
 
-// 매칭 키: 발주서 C열(쇼핑몰 주문번호(필수))
-const MATCH_COL_INDEX = 2;
-
 /* ===================== 유틸 ===================== */
 const $ = (id)=>document.getElementById(id);
 
@@ -341,7 +346,7 @@ async function fetchText(url, timeoutMs = 9000){
   const controller = new AbortController();
   const t = setTimeout(()=>controller.abort(), timeoutMs);
   try{
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
     if(!res.ok) throw new Error("HTTP " + res.status);
     return await res.text();
   } finally {
@@ -349,7 +354,18 @@ async function fetchText(url, timeoutMs = 9000){
   }
 }
 
-function normalizeKey(v){ return String(v ?? "").trim(); }
+// ✅ BOM/제로폭 제거 + trim
+function normalizeKey(v){
+  return String(v ?? "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .trim();
+}
+
+// ✅ 주문번호는 열 이동/캐시가 더 흔한 원인이지만,
+// 혹시 모를 숨은 문자도 같이 제거
+function normalizeOrderNo(v){
+  return normalizeKey(v);
+}
 
 function normColorCode(v){
   return normalizeKey(v).replace(/\s+/g,"").replace(/-/g,"").toUpperCase();
@@ -374,21 +390,37 @@ function safeGet(row, idx){
   return (row[idx] ?? "");
 }
 
-  function colorNameFromStock_(colorCodeRaw){
+/* ===================== 매칭 컬럼: 헤더로 찾기 ===================== */
+function getMatchIndexFromHeader_(){
+  // 발주서 헤더명과 정확히 동일해야 함
+  const idx = headerIndexMap.get("쇼핑몰 주문번호(필수)");
+  // 혹시 헤더가 살짝 바뀐 케이스 대비
+  if(idx == null){
+    const idx2 = headerIndexMap.get("쇼핑몰 주문번호");
+    if(idx2 != null) return idx2;
+  }
+  // 최후 fallback (기존 C열)
+  return 2;
+}
+
+/* ===================== 재고/상품명 유틸 ===================== */
+function colorNameFromStock_(colorCodeRaw){
   const code = normColorCode(colorCodeRaw);
   if(!code) return "";
   const info = stockInfoMap.get(code);
-  return (info?.colorName || "").trim(); // 재고시트 I열
+  return (info?.colorName || "").trim();
 }
+
 /* ===================== 데이터 저장 ===================== */
 let headerIndexMap = new Map();
 let orderRows = [];
 let orderIndexMap = new Map();
 
 // 재고
-let stockMap = new Map();       // code -> qty
-let stockInfoMap = new Map();   // code -> { qty, name(F), colorName(I) }
+let stockMap = new Map();
+let stockInfoMap = new Map();
 
+// 상태
 let lastOutRows = [];
 let lastStockTypes = [];
 let originalOutRows = [];
@@ -414,20 +446,31 @@ async function loadAll(){
       Papa.parse(orderCsv, {
         complete: (results)=>{
           const rows = results.data || [];
-          const header = (rows[0] || []).map(h => String(h ?? "").trim());
+          const header = (rows[0] || []).map(h => normalizeKey(h));
 
           headerIndexMap = new Map();
           header.forEach((h, idx)=>{ if(h) headerIndexMap.set(h, idx); });
 
           orderRows = rows.slice(1).filter(r => r && r.length > 1);
 
+          // ✅ 매칭 컬럼 인덱스(헤더로 찾기)
+          const matchIdx = getMatchIndexFromHeader_();
+
           orderIndexMap = new Map();
           for(const r of orderRows){
-            const k = normalizeKey(r[MATCH_COL_INDEX]);
+            const k = normalizeOrderNo(r[matchIdx]);
             if(!k) continue;
             if(!orderIndexMap.has(k)) orderIndexMap.set(k, []);
             orderIndexMap.get(k).push(r);
           }
+
+          // ✅ 디버그 로그
+          console.log("[LOAD] header sample:", header.slice(0, 10));
+          console.log("[LOAD] matchIdx:", matchIdx, "headerName:", header[matchIdx]);
+          console.log("[LOAD] C(2) sample:", orderRows.slice(0,5).map(r => r[2]));
+          console.log("[LOAD] matchCol sample:", orderRows.slice(0,5).map(r => r[matchIdx]));
+          console.log("[LOAD] orderRows:", orderRows.length, "orderIndexMap keys:", orderIndexMap.size);
+
           resolve();
         }
       });
@@ -467,7 +510,6 @@ async function loadAll(){
   }
 }
 
-/* ===================== 재고/상품명 유틸 ===================== */
 function stockQtyLabel_(colorCodeRaw){
   const code = normColorCode(colorCodeRaw);
   if(!code) return "미등록";
@@ -475,7 +517,6 @@ function stockQtyLabel_(colorCodeRaw){
   return String(stockMap.get(code));
 }
 
-  //
 function stripStockTag_(s){
   return String(s ?? "").replace(/\s*\[재고:.*?\]\s*/g, " ").trim();
 }
@@ -489,7 +530,6 @@ function attachStockToRequestDate_(reqDate, colorCode){
   return base ? `${base}  ${tag}` : tag;
 }
 
-// 재고시트 A 매칭 → F(상품명)+I(칼라명) 조합
 function nameFromStock_(colorCodeRaw){
   const code = normColorCode(colorCodeRaw);
   if(!code) return "";
@@ -575,7 +615,6 @@ function gateCopyByTypes(types){
 function buildOutFromSheetRow(row){
   const o = {};
 
-  // EXTRA: B/C/D 강제
   for(const c of EXTRA_COLS){
     o[c.key] = safeGet(row, c.idx);
   }
@@ -585,13 +624,11 @@ function buildOutFromSheetRow(row){
     if(h === "운송장 번호"){ o[h] = ""; continue; }
 
     if(h === "상품명"){
-      // 발주서 L열(0-based 11)이 상품명이라고 했으니 강제 사용
       o[h] = safeGet(row, 11) || "";
       continue;
     }
 
     if(h === "재고"){
-      // 상품컬러코드가 아직 안 들어왔을 수 있으니 뒤에서 채움
       o[h] = "";
       continue;
     }
@@ -600,11 +637,8 @@ function buildOutFromSheetRow(row){
     o[h] = safeGet(row, idx);
   }
 
-  // 재고/표시용 채움
   o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
-
   o["요청일"] = attachStockToRequestDate_(o["요청일"], o["상품컬러코드"]);
-
 
   return o;
 }
@@ -619,11 +653,9 @@ function buildOutManual(colorCode, qty){
   o["상품컬러코드"] = colorCode || "";
   o["수량"] = qty || "";
 
-  // 수동 입력은 재고시트 기반으로 상품명 구성
   o["상품명"] = nameFromStock_(o["상품컬러코드"]);
   o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
   o["옵션(수집)"] = colorNameFromStock_(o["상품컬러코드"]);
-
 
   return o;
 }
@@ -734,7 +766,7 @@ function buildHTMLTable(outRows){
 
 /* ===================== 검색 ===================== */
 function search(){
-  const orderNo = normalizeKey($("orderInput").value);
+  const orderNo = normalizeOrderNo($("orderInput").value);
 
   setPanel("manual", false);
   setPanel("change", false);
@@ -750,6 +782,9 @@ function search(){
     $("tableWrap").innerHTML = `<div class="no-data">주문번호를 입력해주세요.</div>`;
     return;
   }
+
+  // ✅ 디버그(매칭이 갑자기 안 될 때 바로 확인)
+  console.log("[SEARCH] input:", orderNo, "hasKey?", orderIndexMap.has(orderNo));
 
   const rows = orderIndexMap.get(orderNo) || [];
   $("status").textContent = rows.length
@@ -829,14 +864,10 @@ function applyChange(){
       copy["상품컬러코드"] = newColor;
       if(newQty !== "") copy["수량"] = newQty;
 
-      // 변경된 경우: 재고시트 기준 상품명(F+I)로 덮어쓰기
       copy["상품명"] = nameFromStock_(newColor);
       copy["요청일"] = attachStockToRequestDate_(copy["요청일"], newColor);
       copy["옵션(수집)"] = colorNameFromStock_(newColor);
-
-
     }else{
-      // 비선택 행도 재고 표시가 비어있지 않게 보정
       if(copy["재고"] === "") copy["재고"] = stockQtyLabel_(copy["상품컬러코드"]);
     }
 
@@ -882,7 +913,6 @@ $("btnCopy").addEventListener("click", async ()=>{
     ]);
     showToast(`통째로 복사됨 (${lastOutRows.length}건)`);
   }catch(e){
-    // HTML 복사가 막힌 환경이면 텍스트로 폴백
     try{
       await navigator.clipboard.writeText(tsv);
       showToast("복사됨 (서식 제외)");
@@ -891,7 +921,6 @@ $("btnCopy").addEventListener("click", async ()=>{
     }
   }
 });
-
 
 $("btnClear").addEventListener("click", ()=>{
   $("orderInput").value = "";
@@ -912,6 +941,16 @@ $("btnClear").addEventListener("click", ()=>{
   originalOutRows = [];
   lastSource = "none";
 });
+
+/* ✅ Enter로 조회 */
+$("orderInput").addEventListener("keydown", (e)=>{
+  if(e.key === "Enter") search();
+});
+
+$("btnSearch").addEventListener("click", search);
+$("btnManualApply").addEventListener("click", applyManual);
+$("btnChangeApply").addEventListener("click", applyChange);
+$("btnChangeReset").addEventListener("click", resetChange);
 
 /* ===================== 시작 ===================== */
 loadAll();
