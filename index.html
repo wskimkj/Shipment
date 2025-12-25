@@ -375,6 +375,12 @@ function safeGet(row, idx){
   return (row[idx] ?? "");
 }
 
+  function colorNameFromStock_(colorCodeRaw){
+  const code = normColorCode(colorCodeRaw);
+  if(!code) return "";
+  const info = stockInfoMap.get(code);
+  return (info?.colorName || "").trim(); // 재고시트 I열
+}
 /* ===================== 데이터 저장 ===================== */
 let headerIndexMap = new Map();
 let orderRows = [];
@@ -617,6 +623,8 @@ function buildOutManual(colorCode, qty){
   // 수동 입력은 재고시트 기반으로 상품명 구성
   o["상품명"] = nameFromStock_(o["상품컬러코드"]);
   o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
+  o["옵션(수집)"] = colorNameFromStock_(o["상품컬러코드"]);
+
 
   return o;
 }
@@ -803,6 +811,8 @@ function applyChange(){
       // 변경된 경우: 재고시트 기준 상품명(F+I)로 덮어쓰기
       copy["상품명"] = nameFromStock_(newColor);
       copy["요청일"] = attachStockToRequestDate_(copy["요청일"], newColor);
+      copy["옵션(수집)"] = colorNameFromStock_(newColor);
+
 
     }else{
       // 비선택 행도 재고 표시가 비어있지 않게 보정
@@ -849,11 +859,22 @@ $("btnCopy").addEventListener("click", async ()=>{
     return;
   }
   const tsv = buildTSV(lastOutRows);
+const html = buildHTMLTable(lastOutRows);
+
+try{
+  await navigator.clipboard.write([
+    new ClipboardItem({
+      "text/plain": new Blob([tsv], { type: "text/plain" }),
+      "text/html": new Blob([html], { type: "text/html" }),
+    })
+  ]);
+  showToast(`통째로 복사됨 (${lastOutRows.length}건)`);
+}catch(e){
+  // 브라우저에서 HTML 복사 막힌 경우 → 텍스트로 폴백
   try{
     await navigator.clipboard.writeText(tsv);
-    showToast(`통째로 복사됨 (${lastOutRows.length}건)`);
-  }catch(e){
-    console.error(e);
+    showToast("복사됨 (서식 제외)");
+  }catch{
     showToast("복사 실패");
   }
 });
