@@ -705,7 +705,11 @@ function renderTable(outRows, stockTypes){
       <tr>
         <th style="min-width:48px;">#</th>
         <th style="min-width:64px;">선택</th>
-        ${TABLE_COLS.map(c=>`<th style="min-width:140px;">${escapeHtml(c.label)}</th>`).join("")}
+        ${TABLE_COLS.map(c=>{
+  const w = COL_WIDTH[c.label] || COL_WIDTH["_default"];
+  return `<th style="min-width:${w}px; max-width:${w}px;">${escapeHtml(c.label)}</th>`;
+}).join("")}
+
       </tr>
     </thead>
     <tbody>`;
@@ -721,7 +725,12 @@ function renderTable(outRows, stockTypes){
       </td>
       ${TABLE_COLS.map(c=>{
         const v = o[c.key] ?? "";
-        return `<td class="copy" data-copy="${escapeHtml(String(v).trim())}">${escapeHtml(String(v))}</td>`;
+const w = COL_WIDTH[c.label] || COL_WIDTH["_default"];
+return `<td class="copy"
+  style="min-width:${w}px; max-width:${w}px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+  data-copy="${escapeHtml(String(v).trim())}">
+  ${escapeHtml(String(v))}
+</td>`;
       }).join("")}
     </tr>`;
   });
