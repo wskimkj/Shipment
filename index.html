@@ -152,8 +152,8 @@
 
     .copy{cursor:pointer;}
 
-    /* 수동 입력 패널 */
-    .manual{
+    /* 패널 */
+    .panel{
       margin-top: 12px;
       padding: 12px;
       border-radius: 16px;
@@ -164,13 +164,13 @@
       align-items:center;
       flex-wrap:wrap;
     }
-    .manual.show{display:flex;}
-    .manual .label{
+    .panel.show{display:flex;}
+    .panel .label{
       font-size:12px;
       font-weight:900;
       color: rgba(47,42,58,.88);
     }
-    .manual .miniinput{
+    .miniinput{
       display:flex; align-items:center; gap:8px;
       padding:8px 10px;
       border-radius:12px;
@@ -178,10 +178,10 @@
       border:1px solid rgba(170,150,230,.20);
       box-shadow: var(--shadow2);
     }
-    .manual .miniinput input{
+    .miniinput input{
       border:0; outline:0; background:transparent; width:220px; font-size:12.5px;
     }
-    .manual .minihelp{
+    .minihelp{
       font-size:11px;
       color: rgba(110,106,130,.85);
     }
@@ -223,15 +223,15 @@
         <div class="row">
           <div class="input">
             <span style="font-size:12px;opacity:.75;">주문번호</span>
-            <input id="orderInput" type="text" placeholder="쇼핑몰 주문번호(발주서 C열) 입력 후 Enter" />
+            <input id="orderInput" type="text" placeholder="쇼핑몰 주문번호(필수)(발주서 C열) 입력 후 Enter" />
           </div>
           <button class="btn" id="btnSearch">조회</button>
           <button class="btn" id="btnCopy" disabled>복사</button>
           <button class="btn" id="btnClear">초기화</button>
         </div>
 
-        <!-- ✅ 발주서에 주문번호 없을 때: 수동 입력 -->
-        <div class="manual" id="manualPanel">
+        <!-- 발주서에 주문번호 없을 때: 수동 입력 -->
+        <div class="panel" id="manualPanel">
           <span class="label">발주서에 없음 → 수동 입력</span>
 
           <div class="miniinput">
@@ -248,6 +248,25 @@
           <span class="minihelp">재고 5 미만/0/미등록이면 복사 차단</span>
         </div>
 
+        <!-- 발주서에서 불러온 후: 상품 변경 -->
+        <div class="panel" id="changePanel">
+          <span class="label">상품 변경(화면에서만 적용)</span>
+
+          <div class="miniinput">
+            <span style="font-size:11px;opacity:.75;">변경 컬러코드</span>
+            <input id="changeColor" type="text" placeholder="예: ABC123 (필수)" />
+          </div>
+
+          <div class="miniinput" style="width:180px;">
+            <span style="font-size:11px;opacity:.75;">변경 수량</span>
+            <input id="changeQty" type="text" placeholder="예: 1" />
+          </div>
+
+          <button class="btn" id="btnChangeApply">변경 적용</button>
+          <button class="btn" id="btnChangeReset">변경 취소</button>
+          <span class="minihelp">변경 적용 시 재고를 새 컬러코드로 재검사</span>
+        </div>
+
         <div class="table-wrap" id="tableWrap">
           <div class="no-data">검색 결과가 없습니다.</div>
         </div>
@@ -259,10 +278,10 @@
   <div id="toast">복사됨</div>
 
 <script>
-/* ===================== ✅ 기준 설정 ===================== */
-const LOW_STOCK_THRESHOLD = 5; // ✅ "5개 미만" 경고/차단 기준
+/* ===================== 기준 ===================== */
+const LOW_STOCK_THRESHOLD = 5; // 5개 미만이면 복사 차단
 
-/* ===================== ✅ Sheet Config ===================== */
+/* ===================== 시트 ===================== */
 // 발주서
 const ORDER_SHEET_URL_VIEW =
   "https://docs.google.com/spreadsheets/d/1_Bxfag-90U6u-6JbhxNqeoD9vRns-CpPeXPIJYO1Z5o/edit?gid=518656308#gid=518656308";
@@ -275,11 +294,18 @@ const STOCK_SHEET_URL_VIEW =
 const STOCK_CSV_URL =
   "https://docs.google.com/spreadsheets/d/1_L12NKkBVU4c5xDPrYLUQRnSUG2NoAwYGWIfPDVO3bM/export?format=csv&gid=366983013";
 
-// 링크 세팅
 document.getElementById("orderLink").href = ORDER_SHEET_URL_VIEW;
 document.getElementById("stockLink").href = STOCK_SHEET_URL_VIEW;
 
-/* ===================== ✅ Output Columns (요청 순서) ===================== */
+/* ===================== 강제 포함 B/C/D ===================== */
+// CSV 0-based: A=0, B=1, C=2, D=3
+const EXTRA_COLS = [
+  { key: "__B", label: "사방넷주문번호", idx: 1 },
+  { key: "__C", label: "쇼핑몰 주문번호(필수)", idx: 2 },
+  { key: "__D", label: "쇼핑몰", idx: 3 },
+];
+
+/* ===================== 요청 출력 컬럼 ===================== */
 const OUTPUT_HEADERS = [
   "요청일","목적","전산 처리 방법","요청자",
   "수령인","배송수단","운송장 번호","받는분연락처","받는분 기타연락처","주소","배송메세지",
@@ -288,13 +314,15 @@ const OUTPUT_HEADERS = [
   "비고"
 ];
 
-/**
- * ✅ 매칭 키: 발주서 C열
- * CSV row는 0-based: A=0, B=1, C=2
- */
+const TABLE_COLS = [
+  ...EXTRA_COLS.map(c => ({ key:c.key, label:c.label })),
+  ...OUTPUT_HEADERS.map(h => ({ key:h, label:h }))
+];
+
+// 매칭 키: 발주서 C열(쇼핑몰 주문번호(필수))
 const MATCH_COL_INDEX = 2;
 
-/* ===================== Utilities ===================== */
+/* ===================== 유틸 ===================== */
 const $ = (id)=>document.getElementById(id);
 
 function showToast(msg="복사됨"){
@@ -328,7 +356,7 @@ function toNumber(v){
 }
 
 function escapeHtml(str){
-  return str
+  return String(str ?? "")
     .replaceAll("&","&amp;")
     .replaceAll("<","&lt;")
     .replaceAll(">","&gt;")
@@ -336,25 +364,29 @@ function escapeHtml(str){
     .replaceAll("'","&#039;");
 }
 
-/* ===================== Data Stores ===================== */
-let orderHeader = [];
+function safeGet(row, idx){
+  if(!row || idx == null || idx < 0) return "";
+  return (row[idx] ?? "");
+}
+
+/* ===================== 데이터 저장 ===================== */
+let headerIndexMap = new Map(); // 발주서 헤더명 -> 인덱스
 let orderRows = [];
-let headerIndexMap = new Map();
-let orderIndexMap = new Map();   // 주문번호 -> [row,row,...]
-let stockMap = new Map();        // 컬러코드 -> 재고수량(number)
+let orderIndexMap = new Map();  // 주문번호 -> [row,row,...]
+let stockMap = new Map();       // 컬러코드 -> 재고수량
 
-// ✅ 결과 캐시(통째 복사/표시용): "출력 오브젝트" 배열로 통일
-// outRows: [{...OUTPUT_HEADERS 값...}, ...]
 let lastOutRows = [];
-let lastStockTypes = []; // 각 행의 stock type 저장 (ok/low/out/na)
+let lastStockTypes = [];
+let originalOutRows = [];
+let lastSource = "none";
 
-/* ===================== Load Both CSV ===================== */
+/* ===================== 로드 ===================== */
 async function loadAll(){
   $("status").textContent = "데이터 로딩 중… (발주서/재고)";
   $("stat2").textContent = "";
   clearStockUI();
-  setManualMode(false);
-
+  setPanel("manual", false);
+  setPanel("change", false);
   $("btnCopy").disabled = true;
 
   try{
@@ -363,16 +395,17 @@ async function loadAll(){
       fetchText(STOCK_CSV_URL)
     ]);
 
-    // 발주서
+    // 발주서 파싱(헤더 포함)
     await new Promise((resolve)=>{
       Papa.parse(orderCsv, {
         complete: (results)=>{
           const rows = results.data || [];
-          orderHeader = (rows[0] || []).map(h => String(h ?? "").trim());
-          orderRows = rows.slice(1).filter(r => r && r.length > 1);
+          const header = (rows[0] || []).map(h => String(h ?? "").trim());
 
           headerIndexMap = new Map();
-          orderHeader.forEach((h, idx)=>{ if(h) headerIndexMap.set(h, idx); });
+          header.forEach((h, idx)=>{ if(h) headerIndexMap.set(h, idx); });
+
+          orderRows = rows.slice(1).filter(r => r && r.length > 1);
 
           orderIndexMap = new Map();
           for(const r of orderRows){
@@ -386,7 +419,7 @@ async function loadAll(){
       });
     });
 
-    // 재고 (A=컬러코드(0), K=재고(10))
+    // 재고 파싱(A=코드, K=재고)
     await new Promise((resolve)=>{
       Papa.parse(stockCsv, {
         complete: (results)=>{
@@ -411,7 +444,7 @@ async function loadAll(){
   }
 }
 
-/* ===================== Stock Status ===================== */
+/* ===================== 재고 ===================== */
 function stockStatusByColorCode(colorCodeRaw){
   const code = normColorCode(colorCodeRaw);
   if(!code) return { type:"na", label:"재고 미등록", qty:null };
@@ -421,7 +454,6 @@ function stockStatusByColorCode(colorCodeRaw){
   }
 
   const qty = stockMap.get(code);
-
   if(qty <= 0) return { type:"out", label:`재고 0`, qty };
   if(qty < LOW_STOCK_THRESHOLD) return { type:"low", label:`재고 ${qty} (${LOW_STOCK_THRESHOLD} 미만)`, qty };
   return { type:"ok", label:`재고 ${qty}`, qty };
@@ -435,20 +467,18 @@ function badgeHtml(type, text){
   return `<span class="${cls}">${escapeHtml(text)}</span>`;
 }
 
-/* ===================== UI Helpers ===================== */
+/* ===================== UI ===================== */
 function clearStockUI(){
   $("stockSummary").textContent = "";
   $("copyGateMsg").textContent = "";
   $("copyGateMsg").className = "";
 }
-
-function setManualMode(on){
-  const panel = $("manualPanel");
-  panel.classList.toggle("show", !!on);
+function setPanel(which, on){
+  const el = which === "manual" ? $("manualPanel") : $("changePanel");
+  el.classList.toggle("show", !!on);
 }
 
 function gateCopyByTypes(types){
-  // types 배열 중 하나라도 ok 아닌게 있으면 차단
   let ok=0, low=0, out=0, na=0;
   for(const t of types){
     if(t === "ok") ok++;
@@ -461,4 +491,283 @@ function gateCopyByTypes(types){
   if(out) badges.push(badgeHtml("out", `OUT ${out}건`));
   if(low) badges.push(badgeHtml("low", `LOW ${low}건`));
   if(na)  badges.push(badgeHtml("na", `N/A ${na}건`));
-  if(!out && !low && !n
+  if(!out && !low && !na) badges.push(badgeHtml("ok", `OK ${ok}건`));
+  $("stockSummary").innerHTML = badges.join(" ");
+
+  const blocked = (out > 0 || low > 0 || na > 0);
+  $("btnCopy").disabled = blocked;
+
+  if(blocked){
+    if(out > 0){
+      $("copyGateMsg").textContent = "출고요청 방지: 재고 0(OUT) 포함";
+      $("copyGateMsg").className = "warnline out";
+    }else if(low > 0){
+      $("copyGateMsg").textContent = `출고요청 방지: 재고 ${LOW_STOCK_THRESHOLD} 미만(LOW) 포함`;
+      $("copyGateMsg").className = "warnline low";
+    }else{
+      $("copyGateMsg").textContent = "출고요청 방지: 재고 미등록(N/A) 포함";
+      $("copyGateMsg").className = "warnline na";
+    }
+  }else{
+    $("copyGateMsg").textContent = "복사 가능";
+    $("copyGateMsg").className = "warnline";
+  }
+}
+
+/* ===================== out row 생성 ===================== */
+function buildOutFromSheetRow(row){
+  const o = {};
+
+  // EXTRA: B/C/D 강제
+  for(const c of EXTRA_COLS){
+    o[c.key] = safeGet(row, c.idx);
+  }
+
+  // OUTPUT: 헤더명 기반
+  for(const h of OUTPUT_HEADERS){
+    if(h === "배송수단"){ o[h] = "택배"; continue; }
+    if(h === "운송장 번호"){ o[h] = ""; continue; }
+
+    const idx = headerIndexMap.get(h);
+    o[h] = safeGet(row, idx);
+  }
+
+  return o;
+}
+
+function buildOutManual(colorCode, qty){
+  const o = {};
+  for(const c of EXTRA_COLS) o[c.key] = "";
+  for(const h of OUTPUT_HEADERS) o[h] = "";
+  o["배송수단"] = "택배";
+  o["운송장 번호"] = "";
+  o["상품컬러코드"] = colorCode || "";
+  o["수량"] = qty || "";
+  return o;
+}
+
+/* ===================== 렌더 ===================== */
+function renderTable(outRows, stockTypes){
+  const wrap = $("tableWrap");
+
+  lastOutRows = outRows || [];
+  lastStockTypes = stockTypes || [];
+
+  clearStockUI();
+
+  if(!outRows || outRows.length === 0){
+    wrap.innerHTML = `<div class="no-data">검색 결과가 없습니다.</div>`;
+    $("btnCopy").disabled = true;
+    return;
+  }
+
+  gateCopyByTypes(stockTypes);
+
+  let html = `<table>
+    <thead>
+      <tr>
+        <th style="min-width:48px;">#</th>
+        ${TABLE_COLS.map(c=>`<th style="min-width:140px;">${escapeHtml(c.label)}</th>`).join("")}
+      </tr>
+    </thead>
+    <tbody>`;
+
+  outRows.forEach((o, i)=>{
+    const t = stockTypes[i] || "na";
+    const trClass = t === "low" ? "low" : t === "out" ? "out" : t === "na" ? "na" : "";
+
+    html += `<tr class="${trClass}">
+      <td class="copy" data-copy="${i+1}">${i+1}</td>
+      ${TABLE_COLS.map(c=>{
+        const v = o[c.key] ?? "";
+        return `<td class="copy" data-copy="${escapeHtml(String(v).trim())}">${escapeHtml(String(v))}</td>`;
+      }).join("")}
+    </tr>`;
+  });
+
+  html += `</tbody></table>`;
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll(".copy").forEach(td=>{
+    td.addEventListener("click", async ()=>{
+      const text = (td.getAttribute("data-copy") || td.textContent || "").trim();
+      try{
+        await navigator.clipboard.writeText(text);
+        showToast("복사됨");
+      }catch{
+        showToast("복사 실패");
+      }
+    });
+  });
+}
+
+/* ===================== TSV 복사 ===================== */
+function buildTSV(outRows){
+  const INCLUDE_HEADER_ROW = false; // 필요하면 true
+  const lines = [];
+  if(INCLUDE_HEADER_ROW){
+    lines.push(TABLE_COLS.map(c => c.label).join("\t"));
+  }
+  outRows.forEach(o=>{
+    const vals = TABLE_COLS.map(c => String(o[c.key] ?? "").replace(/\t/g," ").replace(/\r?\n/g," "));
+    lines.push(vals.join("\t"));
+  });
+  return lines.join("\n");
+}
+
+/* ===================== 검색 ===================== */
+function search(){
+  const orderNo = normalizeKey($("orderInput").value);
+
+  setPanel("manual", false);
+  setPanel("change", false);
+  $("btnCopy").disabled = true;
+  clearStockUI();
+
+  lastOutRows = [];
+  lastStockTypes = [];
+  originalOutRows = [];
+  lastSource = "none";
+
+  if(!orderNo){
+    $("tableWrap").innerHTML = `<div class="no-data">주문번호를 입력해주세요.</div>`;
+    return;
+  }
+
+  const rows = orderIndexMap.get(orderNo) || [];
+  $("status").textContent = rows.length
+    ? `검색 결과: ${rows.length.toLocaleString()}건`
+    : "검색 결과 없음 (수동 입력 가능)";
+
+  if(rows.length === 0){
+    setPanel("manual", true);
+    $("tableWrap").innerHTML =
+      `<div class="no-data">발주서에서 주문번호를 찾지 못했습니다.<br/>아래에서 <strong>상품컬러코드</strong>를 입력하면 재고 확인 후 결과 테이블을 만들 수 있어요.</div>`;
+    return;
+  }
+
+  const outRows = rows.map(r => buildOutFromSheetRow(r));
+  const stockTypes = outRows.map(o => stockStatusByColorCode(o["상품컬러코드"]).type);
+
+  lastSource = "sheet";
+  originalOutRows = JSON.parse(JSON.stringify(outRows)); // 변경 취소용
+  renderTable(outRows, stockTypes);
+
+  setPanel("change", true);
+  $("changeColor").value = normalizeKey(outRows[0]["상품컬러코드"] || "");
+  $("changeQty").value = normalizeKey(outRows[0]["수량"] || "");
+}
+
+/* ===================== 수동 입력 ===================== */
+function applyManual(){
+  const color = normalizeKey($("manualColor").value);
+  const qty = normalizeKey($("manualQty").value);
+
+  if(!color){
+    showToast("상품컬러코드를 입력해주세요");
+    return;
+  }
+
+  const out = buildOutManual(color, qty);
+  const st = stockStatusByColorCode(out["상품컬러코드"]);
+
+  lastSource = "manual";
+  originalOutRows = JSON.parse(JSON.stringify([out]));
+
+  $("status").textContent = "수동 입력 결과: 1건";
+  renderTable([out], [st.type]);
+}
+
+/* ===================== 상품 변경 ===================== */
+function applyChange(){
+  if(lastSource !== "sheet" || !lastOutRows || lastOutRows.length === 0){
+    showToast("변경할 검색 결과가 없습니다");
+    return;
+  }
+
+  const newColor = normalizeKey($("changeColor").value);
+  const newQty = normalizeKey($("changeQty").value);
+
+  if(!newColor){
+    showToast("변경 컬러코드를 입력해주세요");
+    return;
+  }
+
+  const updated = lastOutRows.map(o=>{
+    const copy = { ...o };
+    copy["상품컬러코드"] = newColor;
+    if(newQty !== "") copy["수량"] = newQty;
+    return copy;
+  });
+
+  const types = updated.map(o => stockStatusByColorCode(o["상품컬러코드"]).type);
+  renderTable(updated, types);
+  showToast("상품 변경 적용됨(화면만)");
+}
+
+function resetChange(){
+  if(!originalOutRows || originalOutRows.length === 0){
+    showToast("되돌릴 데이터가 없습니다");
+    return;
+  }
+  const restored = JSON.parse(JSON.stringify(originalOutRows));
+  const types = restored.map(o => stockStatusByColorCode(o["상품컬러코드"]).type);
+  renderTable(restored, types);
+  showToast("변경 취소됨");
+}
+
+/* ===================== 이벤트 ===================== */
+$("btnSearch").addEventListener("click", search);
+$("orderInput").addEventListener("keydown", (e)=>{
+  if(e.key === "Enter"){ e.preventDefault(); search(); }
+});
+
+$("btnManualApply").addEventListener("click", applyManual);
+
+$("btnChangeApply").addEventListener("click", applyChange);
+$("btnChangeReset").addEventListener("click", resetChange);
+
+$("btnCopy").addEventListener("click", async ()=>{
+  if(!lastOutRows || lastOutRows.length === 0){
+    showToast("복사할 결과 없음");
+    return;
+  }
+  if($("btnCopy").disabled){
+    showToast("재고 경고로 복사 차단됨");
+    return;
+  }
+  const tsv = buildTSV(lastOutRows);
+  try{
+    await navigator.clipboard.writeText(tsv);
+    showToast(`통째로 복사됨 (${lastOutRows.length}건)`);
+  }catch(e){
+    console.error(e);
+    showToast("복사 실패");
+  }
+});
+
+$("btnClear").addEventListener("click", ()=>{
+  $("orderInput").value = "";
+  $("manualColor").value = "";
+  $("manualQty").value = "";
+  $("changeColor").value = "";
+  $("changeQty").value = "";
+
+  $("status").textContent = "초기화됨";
+  $("tableWrap").innerHTML = `<div class="no-data">검색 결과가 없습니다.</div>`;
+  clearStockUI();
+  setPanel("manual", false);
+  setPanel("change", false);
+  $("btnCopy").disabled = true;
+
+  lastOutRows = [];
+  lastStockTypes = [];
+  originalOutRows = [];
+  lastSource = "none";
+});
+
+/* ===================== 시작 ===================== */
+loadAll();
+</script>
+</body>
+</html>
