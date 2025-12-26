@@ -46,13 +46,12 @@
         linear-gradient(180deg, var(--bg1), var(--bg2));
     }
     .field-label{
-  font-size:12px;
-  opacity:.75;
-  white-space:nowrap;   /* 줄바꿈 방지 */
-  min-width:52px;       /* 라벨 폭(원하는 값으로) */
-  flex:0 0 auto;
-}
-
+      font-size:12px;
+      opacity:.75;
+      white-space:nowrap;
+      min-width:52px;
+      flex:0 0 auto;
+    }
 
     .container{max-width:1400px;margin:0 auto;padding:28px 16px 46px;}
     .card{
@@ -258,8 +257,7 @@
         <div class="row">
           <div class="input">
             <span class="field-label">주문번호</span>
-                <input id="orderInput" type="text" placeholder="쇼핑몰 주문번호 입력" />
-
+            <input id="orderInput" type="text" placeholder="쇼핑몰 주문번호 입력" />
           </div>
           <button class="btn" id="btnSearch">조회</button>
           <button class="btn" id="btnCopy" disabled>복사</button>
@@ -367,8 +365,22 @@ const OUTPUT_HEADERS = [
   "비고"
 ];
 
-// ✅ 결과 테이블 컬럼 순서
-const TABLE_COLS = [
+/* ===================== 결과 테이블 컬럼(화면 숨김 + 복사 전체 포함) ===================== */
+
+// ✅ 결과 테이블(화면)에서 숨길 열들 (label 기준)
+const HIDE_IN_VIEW = new Set([
+  "배송수단",
+  "운송장 번호",
+  "받는분연락처",
+  "주소",
+  "배송메세지",
+  "큐텐(한글상품명)",
+  "큐텐바코드",
+  "쇼핑몰(참고용)",
+]);
+
+// ✅ 복사용 컬럼(전체)
+const TABLE_COLS_COPY = [
   { key: "요청일", label: "요청일" },
   ...EXTRA_COLS.map(c => ({ key:c.key, label:c.label })),
   { key: "수령인", label: "수령인" },
@@ -376,6 +388,9 @@ const TABLE_COLS = [
     .filter(h => !["요청일","수령인"].includes(h))
     .map(h => ({ key:h, label:h }))
 ];
+
+// ✅ 화면용 컬럼(숨길 열 제외)
+const TABLE_COLS_VIEW = TABLE_COLS_COPY.filter(c => !HIDE_IN_VIEW.has(c.label));
 
 const COL_WIDTH = {
   "요청일": 100,
@@ -878,7 +893,7 @@ function renderTable(outRows, stockTypes){
       <tr>
         <th style="min-width:48px;">#</th>
         <th style="min-width:64px;">선택</th>
-        ${TABLE_COLS.map(c=>{
+        ${TABLE_COLS_VIEW.map(c=>{
           const w = COL_WIDTH[c.label] || COL_WIDTH["_default"];
           return `<th style="min-width:${w}px; max-width:${w}px;">${escapeHtml(c.label)}</th>`;
         }).join("")}
@@ -895,7 +910,7 @@ function renderTable(outRows, stockTypes){
       <td class="chkcell">
         ${showCheckbox ? `<input type="checkbox" class="rowChk" data-idx="${i}">` : ``}
       </td>
-      ${TABLE_COLS.map(c=>{
+      ${TABLE_COLS_VIEW.map(c=>{
         const v = o[c.key] ?? "";
         const w = COL_WIDTH[c.label] || COL_WIDTH["_default"];
         return `<td class="copy"
@@ -923,24 +938,27 @@ function renderTable(outRows, stockTypes){
   });
 }
 
-/* ===================== TSV 복사 ===================== */
+/* ===================== TSV/HTML 복사 (숨긴 열도 포함) ===================== */
 function buildTSV(outRows){
   const INCLUDE_HEADER_ROW = false;
   const lines = [];
   if(INCLUDE_HEADER_ROW){
-    lines.push(TABLE_COLS.map(c => c.label).join("\t"));
+    lines.push(TABLE_COLS_COPY.map(c => c.label).join("\t"));
   }
   outRows.forEach(o=>{
-    const vals = TABLE_COLS.map(c => String(o[c.key] ?? "").replace(/\t/g," ").replace(/\r?\n/g," "));
+    const vals = TABLE_COLS_COPY.map(c =>
+      String(o[c.key] ?? "").replace(/\t/g," ").replace(/\r?\n/g," ")
+    );
     lines.push(vals.join("\t"));
   });
   return lines.join("\n");
 }
+
 function buildHTMLTable(outRows){
   const tdStyle = "border:1px solid #eee;padding:6px 8px;text-align:center;vertical-align:middle;";
 
   const tbody = outRows.map(o => {
-    const tds = TABLE_COLS.map(c =>
+    const tds = TABLE_COLS_COPY.map(c =>
       `<td style="${tdStyle}">${escapeHtml(String(o[c.key] ?? ""))}</td>`
     ).join("");
     return `<tr>${tds}</tr>`;
@@ -1090,8 +1108,6 @@ $("btnExistToggle").addEventListener("click", ()=>{
   const body = $("existBody");
   const isOpen = body.style.display !== "none";
   body.style.display = isOpen ? "none" : "block";
-
-  // 텍스트는 "펼치기 (n건)" 상태가 있을 수 있어서, 단순히 접기/펼치기로만 갱신
   $("btnExistToggle").textContent = isOpen ? "펼치기" : "접기";
 });
 
