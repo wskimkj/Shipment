@@ -70,6 +70,7 @@
       margin-top:8px; display:flex; flex-wrap:wrap; gap:8px;
       color:rgba(110,106,130,.85); font-size:12px;
       align-items:center;
+      line-height:1.2;
     }
     .pill{
       font-size:11px; padding:5px 10px; border-radius:999px;
@@ -134,6 +135,7 @@
       overflow:auto; background: rgba(255,255,255,.68);
       box-shadow: 0 1px 0 rgba(255,255,255,.70) inset;
       max-height: 72vh;
+      scrollbar-gutter: stable;
     }
     table{width:100%; border-collapse:separate; border-spacing:0; font-size:12px;}
     thead th{
@@ -148,6 +150,7 @@
       padding:10px 12px;
       border-bottom:1px solid rgba(170,150,230,.12);
       vertical-align:top;
+      white-space: nowrap;
     }
     tbody tr:nth-child(even){background: rgba(243,241,250,.55);}
     tbody tr:hover{background: linear-gradient(90deg, rgba(255,143,188,.18), rgba(184,167,255,.14));}
@@ -222,37 +225,14 @@
       box-shadow: 0 0 0 3px rgba(255,143,188,.12), var(--shadow2);
     }
 
-    /* 상단 스티키 바 느낌 */
-    .card-inner{
-      position: relative;
-    }
-
     /* 상태/배지 영역 정리 */
-    .meta{
-      line-height: 1.2;
-    }
-    #status{
-      font-weight: 900;
-    }
-    #stat2{
-      opacity:.75;
-    }
+    #status{ font-weight:900; }
+    #stat2{ opacity:.75; }
     #copyGateMsg{
       padding:4px 8px;
       border-radius:999px;
       background: rgba(255,255,255,.55);
       border:1px solid rgba(170,150,230,.18);
-    }
-
-    /* 테이블: 더 깔끔하게 */
-    .table-wrap{
-      scrollbar-gutter: stable;
-    }
-    tbody td{
-      white-space: nowrap;
-    }
-    td.copy{
-      user-select: none;
     }
 
     /* 행 강조: 체크된 행 하이라이트 */
@@ -298,7 +278,7 @@
       font-weight:900;
     }
 
-    /* 검색 로딩 스피너 */
+    /* 로딩 스피너 */
     .spinner{
       width:14px; height:14px;
       border-radius:50%;
@@ -310,6 +290,48 @@
     }
     @keyframes spin{
       to{ transform: rotate(360deg); }
+    }
+
+    /* ===================== 셀 호버 미리보기(툴팁) ===================== */
+    td.copy{
+      position: relative;
+      user-select: none;
+    }
+
+    td.copy::after{
+      content: attr(data-preview);
+      position: absolute;
+      left: 10px;
+      top: calc(100% + 6px);
+      z-index: 9999;
+
+      max-width: min(520px, 90vw);
+      white-space: normal;
+      word-break: break-word;
+
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(170,150,230,.35);
+      background: rgba(255,255,255,.96);
+      box-shadow: 0 18px 50px rgba(30,18,60,.12);
+
+      font-size: 12px;
+      font-weight: 700;
+      color: rgba(47,42,58,.95);
+
+      opacity: 0;
+      transform: translateY(-4px);
+      pointer-events: none;
+      transition: .12s ease;
+    }
+
+    td.copy:hover::after{
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    td.copy[data-preview=""]::after{
+      display:none;
     }
   </style>
 </head>
@@ -590,7 +612,7 @@ function safeGet(row, idx){
   return (row[idx] ?? "");
 }
 
-/* ===================== 로딩 UI (원래 style에 들어가 있던 JS를 script로 이동) ===================== */
+/* ===================== 로딩 UI ===================== */
 function setLoadingUI_(on, msg){
   const st = $("status");
   if(!st) return;
@@ -677,13 +699,12 @@ function badgeHtml(type, text){
   return `<span class="${cls}">${escapeHtml(text)}</span>`;
 }
 
-/* ===================== ✅ 색상 드롭다운 (상품코드 기준 필터 + I열만 표시 + 재고 선택 방지) ===================== */
+/* ===================== ✅ 색상 드롭다운 ===================== */
 let colorSelectWired = false;
 
 function getAllowedProductCodesForDropdown_(){
   if(!lastOutRows || lastOutRows.length === 0) return new Set();
 
-  // 여러 건이면 체크된 행 기준, 없으면 첫 행 기준
   let idxs = [];
   if(lastOutRows.length > 1){
     idxs = getCheckedIndexes_();
@@ -708,10 +729,9 @@ function rebuildColorSelectOptions_(allowedProductCodes){
 
   const items = [];
   stockInfoMap.forEach((info, code)=>{
-    const color = (info?.colorName || "").trim(); // I열(색상명)
+    const color = (info?.colorName || "").trim();
     const label = color || "(색상명 없음)";
 
-    // ✅ 상품코드 필터링: 컬러코드 prefix로 판단
     let isAllowed = true;
     if(!allowAll){
       isAllowed = Array.from(allowedProductCodes).some(pc => String(code).startsWith(pc));
@@ -739,8 +759,6 @@ function rebuildColorSelectOptions_(allowedProductCodes){
               : " (N/A)";
 
     opt.textContent = `${it.label}${tag}`;
-
-    // ✅ 선택 불가: low/out/na (보이긴 함)
     if(it.type !== "ok") opt.disabled = true;
 
     frag.appendChild(opt);
@@ -752,7 +770,6 @@ function refreshColorDropdownByCurrentRows_(){
   const allowed = getAllowedProductCodesForDropdown_();
   rebuildColorSelectOptions_(allowed);
 
-  // 현재 changeColor 값이 ok면 select 동기화
   const sel = $("changeColorSelect");
   const code = normColorCode($("changeColor")?.value || "");
   const st = stockStatusByColorCode(code);
@@ -767,7 +784,6 @@ function wireColorSelect_(){
   const input = $("changeColor");
   if(!sel || !input) return;
 
-  // select → input
   sel.addEventListener("change", ()=>{
     const code = sel.value;
     if(code){
@@ -776,7 +792,6 @@ function wireColorSelect_(){
     }
   });
 
-  // input → select
   input.addEventListener("input", ()=>{
     const code = normColorCode(input.value);
     const st = stockStatusByColorCode(code);
@@ -905,8 +920,8 @@ function showExistPanelByOrderNo_(orderNo){
   $("existTbody").innerHTML = uniq.map(r=>{
     const sabang = safeGet(r, sabangIdx);
     const mall = safeGet(r, mallIdx);
-    const purpose = safeGet(r, 3); // D
-    const method  = safeGet(r, 4); // E
+    const purpose = safeGet(r, 3);
+    const method  = safeGet(r, 4);
     const dt = safeGet(r, dateIdx);
 
     return `
@@ -978,7 +993,6 @@ async function loadStockOnly(){
   setPanel("change", false);
   $("btnCopy").disabled = true;
 
-  // ✅ 드롭다운 이벤트는 한 번만 연결
   wireColorSelect_();
 
   try{
@@ -993,7 +1007,6 @@ async function loadStockOnly(){
       stockLoaded = true;
 
       rebuildColorSelectOptions_();
-
       setLoadingUI_(false, "재고 로딩 완료 (캐시)");
       $("stat2").textContent = `재고 ${stockMap.size.toLocaleString()}개 · 발주/출고는 조회 시 불러옵니다`;
     }
@@ -1010,7 +1023,6 @@ async function loadStockOnly(){
       stockLoaded = true;
 
       rebuildColorSelectOptions_();
-
       setLoadingUI_(false, "재고 로딩 완료");
       $("stat2").textContent = `재고 ${stockMap.size.toLocaleString()}개 · 발주/출고는 조회 시 불러옵니다`;
     }else{
@@ -1031,14 +1043,13 @@ function buildStockMapsFromParsed_(results){
   stockMap = new Map();
   stockInfoMap = new Map();
 
-  // 재고 파싱(A=코드, F=상품명, I=칼라명, K=재고)
   for(const r of rows){
-    const code = normColorCode(r[0]);     // A
+    const code = normColorCode(r[0]);
     if(!code) continue;
 
-    const name = normalizeKey(r[5]);      // F
-    const colorName = normalizeKey(r[8]); // I
-    const qty = toNumber(r[10]);          // K
+    const name = normalizeKey(r[5]);
+    const colorName = normalizeKey(r[8]);
+    const qty = toNumber(r[10]);
 
     stockMap.set(code, qty);
     stockInfoMap.set(code, { qty, name, colorName });
@@ -1059,7 +1070,6 @@ async function ensureOrderAndExistLoaded_(){
         fetchCsvSmart(EXIST_CSV_BASE),
       ]);
 
-      // 발주서 파싱
       await new Promise((resolve)=>{
         parseCsvWithPapa(orderCsv, (results)=>{
           const rows = results.data || [];
@@ -1085,7 +1095,6 @@ async function ensureOrderAndExistLoaded_(){
         });
       });
 
-      // 출고(EXIST) 파싱
       await new Promise((resolve)=>{
         parseCsvWithPapa(existCsv, (results)=>{
           const rows = results.data || [];
@@ -1176,23 +1185,6 @@ function buildOutFromSheetRow(row){
   return o;
 }
 
-function buildOutManual(colorCode, qty){
-  const o = {};
-  for(const c of EXTRA_COLS) o[c.key] = "";
-  for(const h of OUTPUT_HEADERS) o[h] = "";
-
-  o["배송수단"] = "택배";
-  o["운송장 번호"] = "";
-  o["상품컬러코드"] = colorCode || "";
-  o["수량"] = qty || "";
-
-  o["상품명"] = nameFromStock_(o["상품컬러코드"]);
-  o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
-  o["옵션(수집)"] = colorNameFromStock_(o["상품컬러코드"]);
-
-  return o;
-}
-
 /* ===================== 체크된 행 인덱스 ===================== */
 function getCheckedIndexes_(){
   const wrap = $("tableWrap");
@@ -1200,7 +1192,7 @@ function getCheckedIndexes_(){
   return Array.from(chks).map(c => Number(c.dataset.idx)).filter(n => !Number.isNaN(n));
 }
 
-/* ===================== 툴바(전체 선택/해제/선택 카운트) ===================== */
+/* ===================== 툴바 ===================== */
 function updateToolbar_(){
   const tb = $("tableToolbar");
   if(!tb) return;
@@ -1221,7 +1213,6 @@ function updateToolbar_(){
   }
 }
 
-/* 전체 선택/해제 (버튼은 existBody 안에 있으니, DOM 준비된 지금 연결) */
 $("btnSelectAll")?.addEventListener("click", ()=>{
   const wrap = $("tableWrap");
   wrap.querySelectorAll("input.rowChk").forEach(c => c.checked = true);
@@ -1237,7 +1228,7 @@ $("btnSelectNone")?.addEventListener("click", ()=>{
   updateToolbar_();
 });
 
-/* ===================== 렌더 ===================== */
+/* ===================== 렌더 (툴팁 포함) ===================== */
 function renderTable(outRows, stockTypes){
   const wrap = $("tableWrap");
 
@@ -1275,16 +1266,21 @@ function renderTable(outRows, stockTypes){
     const trClass = t === "low" ? "low" : t === "out" ? "out" : t === "na" ? "na" : "";
 
     html += `<tr class="${trClass}">
-      <td class="copy" data-copy="${i+1}">${i+1}</td>
+      <td class="copy" data-copy="${i+1}" data-preview="${i+1}">${i+1}</td>
       <td class="chkcell">
         ${showCheckbox ? `<input type="checkbox" class="rowChk" data-idx="${i}">` : ``}
       </td>
       ${TABLE_COLS_VIEW.map(c=>{
         const v = o[c.key] ?? "";
         const w = COL_WIDTH[c.label] || COL_WIDTH["_default"];
+
+        const pv = String(v ?? "").trim();
+        const pvShort = pv.length > 500 ? (pv.slice(0, 500) + " …") : pv;
+
         return `<td class="copy"
           style="min-width:${w}px; max-width:${w}px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
-          data-copy="${escapeHtml(String(v).trim())}">
+          data-copy="${escapeHtml(pv)}"
+          data-preview="${escapeHtml(pvShort)}">
           ${escapeHtml(String(v))}
         </td>`;
       }).join("")}
@@ -1294,10 +1290,8 @@ function renderTable(outRows, stockTypes){
   html += `</tbody></table>`;
   wrap.innerHTML = html;
 
-  // ✅ 드롭다운: 현재 rows(체크 포함) 기준으로 필터 갱신
   refreshColorDropdownByCurrentRows_();
 
-  // 체크 이벤트
   wrap.querySelectorAll("input.rowChk").forEach(chk=>{
     chk.addEventListener("change", ()=>{
       const tr = chk.closest("tr");
@@ -1309,10 +1303,8 @@ function renderTable(outRows, stockTypes){
     });
   });
 
-  // 상단 툴바 표시/카운트 갱신
   updateToolbar_();
 
-  // 셀 클릭 복사
   wrap.querySelectorAll(".copy").forEach(td=>{
     td.addEventListener("click", async ()=>{
       const text = (td.getAttribute("data-copy") || td.textContent || "").trim();
@@ -1358,6 +1350,41 @@ function buildHTMLTable(outRows){
     </table>
   `.trim();
 }
+
+/* ===================== 기존 등록 데이터/수동 입력/변경 기능은 원본과 동일 ===================== */
+/* (여기부터 아래는 기존 기능을 유지하기 위해 그대로 포함) */
+
+/* ===================== 수동 입력(out row) ===================== */
+function buildOutManual(colorCode, qty){
+  const o = {};
+  for(const c of EXTRA_COLS) o[c.key] = "";
+  for(const h of OUTPUT_HEADERS) o[h] = "";
+
+  o["배송수단"] = "택배";
+  o["운송장 번호"] = "";
+  o["상품컬러코드"] = colorCode || "";
+  o["수량"] = qty || "";
+
+  o["상품명"] = nameFromStock_(o["상품컬러코드"]);
+  o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
+  o["옵션(수집)"] = colorNameFromStock_(o["상품컬러코드"]);
+
+  return o;
+}
+
+/* ===================== 데이터 저장 (발주서) ===================== */
+let orderRows = [];
+let orderIndexMap = new Map();
+
+/* ===================== 상태 ===================== */
+let lastOutRows = [];
+let lastStockTypes = [];
+let originalOutRows = [];
+let lastSource = "none";
+
+/* ===================== 기존 시트 로드 관련 상태 ===================== */
+let existRows = [];
+let existHeaderMap = new Map();
 
 /* ===================== 검색 ===================== */
 async function search(){
@@ -1426,8 +1453,6 @@ async function search(){
   setPanel("change", true);
   $("changeColor").value = normalizeKey(outRows[0]["상품컬러코드"] || "");
   $("changeQty").value = normalizeKey(outRows[0]["수량"] || "");
-
-  // ✅ 패널 열릴 때도 드롭다운 필터 갱신 + 동기화
   refreshColorDropdownByCurrentRows_();
 }
 
@@ -1515,7 +1540,7 @@ function resetChange(){
   showToast("변경 취소됨");
 }
 
-/* ===================== 이벤트 ===================== */
+/* ===================== EXIST 토글 버튼 ===================== */
 $("btnExistToggle").addEventListener("click", ()=>{
   const body = $("existBody");
   const isOpen = body.style.display !== "none";
@@ -1523,6 +1548,7 @@ $("btnExistToggle").addEventListener("click", ()=>{
   $("btnExistToggle").textContent = isOpen ? "펼치기" : "접기";
 });
 
+/* ===================== 복사 ===================== */
 $("btnCopy").addEventListener("click", async ()=>{
   if(!lastOutRows || lastOutRows.length === 0){
     showToast("복사할 결과 없음");
@@ -1554,6 +1580,7 @@ $("btnCopy").addEventListener("click", async ()=>{
   }
 });
 
+/* ===================== 초기화 ===================== */
 $("btnClear").addEventListener("click", ()=>{
   $("orderInput").value = "";
   $("manualColor").value = "";
@@ -1579,10 +1606,10 @@ $("btnClear").addEventListener("click", ()=>{
   updateToolbar_();
 });
 
+/* ===================== 검색/버튼 이벤트 ===================== */
 $("orderInput").addEventListener("keydown", (e)=>{
   if(e.key === "Enter") search();
 });
-
 $("btnSearch").addEventListener("click", search);
 $("btnManualApply").addEventListener("click", applyManual);
 $("btnChangeApply").addEventListener("click", applyChange);
