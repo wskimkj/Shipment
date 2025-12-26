@@ -1351,9 +1351,6 @@ function buildHTMLTable(outRows){
   `.trim();
 }
 
-/* ===================== 기존 등록 데이터/수동 입력/변경 기능은 원본과 동일 ===================== */
-/* (여기부터 아래는 기존 기능을 유지하기 위해 그대로 포함) */
-
 /* ===================== 수동 입력(out row) ===================== */
 function buildOutManual(colorCode, qty){
   const o = {};
@@ -1371,20 +1368,6 @@ function buildOutManual(colorCode, qty){
 
   return o;
 }
-
-/* ===================== 데이터 저장 (발주서) ===================== */
-let orderRows = [];
-let orderIndexMap = new Map();
-
-/* ===================== 상태 ===================== */
-let lastOutRows = [];
-let lastStockTypes = [];
-let originalOutRows = [];
-let lastSource = "none";
-
-/* ===================== 기존 시트 로드 관련 상태 ===================== */
-let existRows = [];
-let existHeaderMap = new Map();
 
 /* ===================== 검색 ===================== */
 async function search(){
