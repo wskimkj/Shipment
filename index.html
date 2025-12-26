@@ -217,7 +217,7 @@
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <a class="pill" id="orderLink" href="#" target="_blank" rel="noopener noreferrer">발주서</a>
             <a class="pill" id="stockLink" href="#" target="_blank" rel="noopener noreferrer">재고</a>
-            <a class="pill" id="existLink" href="#" target="_blank" rel="noopener noreferrer">목적/처리</a>
+            <a class="pill" id="existLink" href="#" target="_blank" rel="noopener noreferrer"> 출고 </a>
           </div>
         </div>
 
@@ -502,7 +502,7 @@ let lastSource = "none";
 
 /* ===================== 로드 ===================== */
 async function loadAll(){
-  $("status").textContent = "데이터 로딩 중… (발주서/재고/목적/처리)";
+  $("status").textContent = "데이터 로딩 중… (발주서/재고)";
   $("stat2").textContent = "";
   clearStockUI();
   hideExistPanel();
@@ -620,7 +620,7 @@ async function loadAll(){
 
     $("status").textContent = "로딩 완료";
     $("stat2").textContent =
-      `발주 ${orderRows.length.toLocaleString()}건 · 주문번호 키 ${orderIndexMap.size.toLocaleString()}개 · 재고코드 ${stockMap.size.toLocaleString()}개 · 목적/처리 ${existRows.length.toLocaleString()}행`;
+      `발주 ${orderRows.length.toLocaleString()}건 · 주문번호 ${orderIndexMap.size.toLocaleString()}개 · 재고 ${stockMap.size.toLocaleString()}개 · 출고 ${existRows.length.toLocaleString()}행`;
   }catch(e){
     console.error(e);
     $("status").textContent = "로드 실패: 시트가 '보기 가능' 공개인지 확인하세요.";
