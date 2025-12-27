@@ -212,11 +212,9 @@
       display: none; white-space: pre-wrap; word-break: break-word;
     }
     #hoverTip.show{ display: block; opacity: 1; transform: translateY(0); }
-    #stat2,
-#stockSummary,
-#copyGateMsg {
-  display: none !important;
-}
+
+    /* ✅ 상단 요약(재고/발주/주문번호/출고, OK n건, 복사가능) 숨김 */
+    #stat2, #stockSummary, #copyGateMsg { display:none !important; }
   </style>
 </head>
 
@@ -390,10 +388,9 @@
     const TABLE_COLS_VIEW = TABLE_COLS_COPY.filter(c => !HIDE_IN_VIEW.has(c.label));
 
     const COL_WIDTH = {
-        "선택": 10,  
       "요청일": 80, "사방넷주문번호": 100, "쇼핑몰 주문번호(필수)": 120,
-      "상품명": 250, "바코드": 120, "상품코드": 100, "상품컬러코드": 120,"결제금액": 100,
-      " 옵션(수집)": 120, "_default": 60
+      "상품명": 250, "바코드": 120, "상품코드": 100, "상품컬러코드": 120, "결제금액": 100,
+      " 옵션(수집)": 120, "_default": 30
     };
 
     /* ===================== 유틸 ===================== */
@@ -445,7 +442,6 @@
         .replace(/[\u200B-\u200D\uFEFF]/g, "")
         .trim();
     }
-
     function normalizeOrderNo(v){ return normalizeKey(v); }
 
     function normColorCode(v){
@@ -698,7 +694,6 @@
       }
     }
 
-    /* ===================== ✅ 복사 대상(체크 우선, 없으면 전체) + 선택 기준 게이트 ===================== */
     function getCopyTargetIndexes_(){
       if(!lastOutRows || lastOutRows.length === 0) return [];
       const checked = getCheckedIndexes_();
@@ -806,32 +801,112 @@
     let orderLoaded = false;
     let existLoaded = false;
     let orderExistLoadingPromise = null;
+    let orderExistRefreshingPromise = null;
 
-    /* ===================== localStorage 캐시 (재고만) ===================== */
+    /* ===================== localStorage 캐시 ===================== */
     const STOCK_CACHE_KEY = "SHIPMENT_STOCK_CSV_CACHE_V1";
-    const STOCK_CACHE_TTL_MS = 10 * 60 * 1000; // 10분
+    const STOCK_CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4시간
 
-    function loadStockCache_(){
+    const ORDER_CACHE_KEY = "SHIPMENT_ORDER_CSV_CACHE_V1";
+    const EXIST_CACHE_KEY = "SHIPMENT_EXIST_CSV_CACHE_V1";
+    const ORDEREXIST_CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4시간
+
+    function loadCache_(key, ttl){
       try{
-        const raw = localStorage.getItem(STOCK_CACHE_KEY);
+        const raw = localStorage.getItem(key);
         if(!raw) return null;
         const obj = JSON.parse(raw);
         if(!obj || !obj.csv || !obj.ts) return null;
-        if(Date.now() - obj.ts > STOCK_CACHE_TTL_MS) return null;
+        if(Date.now() - obj.ts > ttl) return null;
         return obj.csv;
-      }catch{
-        return null;
-      }
+      }catch{ return null; }
     }
-    function saveStockCache_(csv){
-      try{
-        localStorage.setItem(STOCK_CACHE_KEY, JSON.stringify({ ts: Date.now(), csv }));
-      }catch{}
+
+    function saveCache_(key, csv){
+      try{ localStorage.setItem(key, JSON.stringify({ ts: Date.now(), csv })); }catch{}
     }
+
+    function loadStockCache_(){ return loadCache_(STOCK_CACHE_KEY, STOCK_CACHE_TTL_MS); }
+    function saveStockCache_(csv){ saveCache_(STOCK_CACHE_KEY, csv); }
 
     /* ===================== 파서 ===================== */
     function parseCsvWithPapa(csvText, onDone){
       Papa.parse(csvText, { skipEmptyLines: true, worker: true, complete: (results)=> onDone(results) });
+    }
+
+    /* ===================== 재고 파싱 ===================== */
+    function buildStockMapsFromParsed_(results){
+      const rows = (results.data || []).slice(1).filter(r => r && r.length > 0);
+      stockMap = new Map();
+      stockInfoMap = new Map();
+      for(const r of rows){
+        const code = normColorCode(r[0]);
+        if(!code) continue;
+        const name = normalizeKey(r[5]);      // F
+        const colorName = normalizeKey(r[8]); // I
+        const qty = toNumber(r[10]);          // K
+        stockMap.set(code, qty);
+        stockInfoMap.set(code, { qty, name, colorName });
+      }
+    }
+
+    /* ===================== 발주/출고 파싱 (함수화) ===================== */
+    function parseOrderCsv_(csvText){
+      return new Promise((resolve)=>{
+        parseCsvWithPapa(csvText, (results)=>{
+          const rows = results.data || [];
+          const header = (rows[0] || []).map(h => normalizeKey(h));
+          headerIndexMap = new Map();
+          header.forEach((h, idx)=>{ if(h) headerIndexMap.set(h, idx); });
+
+          orderRows = rows.slice(1).filter(r => r && r.length > 1);
+
+          const matchIdx = getMatchIndexFromHeader_();
+          orderIndexMap = new Map();
+          for(const r of orderRows){
+            const k = normalizeOrderNo(r[matchIdx]);
+            if(!k) continue;
+            if(!orderIndexMap.has(k)) orderIndexMap.set(k, []);
+            orderIndexMap.get(k).push(r);
+          }
+          orderLoaded = true;
+          resolve();
+        });
+      });
+    }
+
+    function parseExistCsv_(csvText){
+      return new Promise((resolve)=>{
+        parseCsvWithPapa(csvText, (results)=>{
+          const rows = results.data || [];
+          const header = (rows[0] || []).map(h => normalizeKey(h));
+          existHeaderMap = new Map();
+          header.forEach((h, idx)=>{ if(h) existHeaderMap.set(h, idx); });
+
+          existRows = rows.slice(1).filter(r => r && r.length > 1);
+
+          existIndexBySabang = new Map();
+          existIndexByMall = new Map();
+
+          const sabangIdx = existHeaderMap.get("사방넷주문번호") ?? existHeaderMap.get("사방넷 주문번호") ?? null;
+          const mallIdx = existHeaderMap.get("쇼핑몰 주문번호(필수)") ?? existHeaderMap.get("쇼핑몰 주문번호") ?? null;
+
+          for(const r of existRows){
+            const sabang = normalizeKey(safeGet(r, sabangIdx));
+            const mall = normalizeOrderNo(safeGet(r, mallIdx));
+            if(sabang){
+              if(!existIndexBySabang.has(sabang)) existIndexBySabang.set(sabang, []);
+              existIndexBySabang.get(sabang).push(r);
+            }
+            if(mall){
+              if(!existIndexByMall.has(mall)) existIndexByMall.set(mall, []);
+              existIndexByMall.get(mall).push(r);
+            }
+          }
+          existLoaded = true;
+          resolve();
+        });
+      });
     }
 
     /* ===================== 1) 재고만 먼저 로드 ===================== */
@@ -849,128 +924,100 @@
         const cached = loadStockCache_();
         if(cached){
           await new Promise((resolve)=>{
-            parseCsvWithPapa(cached, (results)=>{
-              buildStockMapsFromParsed_(results);
-              resolve();
-            });
+            parseCsvWithPapa(cached, (results)=>{ buildStockMapsFromParsed_(results); resolve(); });
           });
           stockLoaded = true;
           rebuildColorSelectOptions_();
           setLoadingUI_(false, "재고 로딩 완료 (캐시)");
-          $("stat2").textContent = `재고 ${stockMap.size.toLocaleString()}개 · 발주/출고는 조회 시 불러옵니다`;
         }
 
         const stockCsv = await fetchCsvSmart(STOCK_CSV_BASE);
         if(!looksLikeBadCsv(stockCsv)){
           saveStockCache_(stockCsv);
           await new Promise((resolve)=>{
-            parseCsvWithPapa(stockCsv, (results)=>{
-              buildStockMapsFromParsed_(results);
-              resolve();
-            });
+            parseCsvWithPapa(stockCsv, (results)=>{ buildStockMapsFromParsed_(results); resolve(); });
           });
           stockLoaded = true;
           rebuildColorSelectOptions_();
           setLoadingUI_(false, "재고 로딩 완료");
-          $("stat2").textContent = `재고 ${stockMap.size.toLocaleString()}개 · 발주/출고는 조회 시 불러옵니다`;
         }else{
-          if(!stockLoaded){
-            setLoadingUI_(false, "재고 로드 실패: 시트 공개(보기 가능) 확인");
-          }
+          if(!stockLoaded) setLoadingUI_(false, "재고 로드 실패: 시트 공개(보기 가능) 확인");
         }
       }catch(e){
         console.error(e);
-        if(!stockLoaded){
-          setLoadingUI_(false, "재고 로드 실패: 시트 공개(보기 가능) 확인");
-        }
+        if(!stockLoaded) setLoadingUI_(false, "재고 로드 실패: 시트 공개(보기 가능) 확인");
       }
     }
 
-    function buildStockMapsFromParsed_(results){
-      const rows = (results.data || []).slice(1).filter(r => r && r.length > 0);
-      stockMap = new Map();
-      stockInfoMap = new Map();
-      for(const r of rows){
-        const code = normColorCode(r[0]);
-        if(!code) continue;
-        const name = normalizeKey(r[5]);      // F
-        const colorName = normalizeKey(r[8]); // I
-        const qty = toNumber(r[10]);          // K
-        stockMap.set(code, qty);
-        stockInfoMap.set(code, { qty, name, colorName });
-      }
-    }
+    /* ===================== ✅ 발주/출고: 캐시 우선 + 백그라운드 갱신 ===================== */
+    async function refreshOrderExistInBackground_(){
+      if(orderExistRefreshingPromise) return orderExistRefreshingPromise;
 
-    /* ===================== 2) 발주서+출고는 조회 시 1회 Lazy Load ===================== */
-    async function ensureOrderAndExistLoaded_(){
-      if(orderLoaded && existLoaded) return;
-      if(orderExistLoadingPromise) return orderExistLoadingPromise;
-
-      orderExistLoadingPromise = (async ()=>{
-        setLoadingUI_(true, "발주/출고 데이터 불러오는 중…");
+      orderExistRefreshingPromise = (async ()=>{
         try{
           const [orderCsv, existCsv] = await Promise.all([
             fetchCsvSmart(ORDER_CSV_BASE),
             fetchCsvSmart(EXIST_CSV_BASE),
           ]);
 
-          await new Promise((resolve)=>{
-            parseCsvWithPapa(orderCsv, (results)=>{
-              const rows = results.data || [];
-              const header = (rows[0] || []).map(h => normalizeKey(h));
-              headerIndexMap = new Map();
-              header.forEach((h, idx)=>{ if(h) headerIndexMap.set(h, idx); });
+          if(!looksLikeBadCsv(orderCsv)){
+            saveCache_(ORDER_CACHE_KEY, orderCsv);
+            await parseOrderCsv_(orderCsv);
+          }
+          if(!looksLikeBadCsv(existCsv)){
+            saveCache_(EXIST_CACHE_KEY, existCsv);
+            await parseExistCsv_(existCsv);
+          }
+        }catch(e){
+          // 백그라운드 갱신 실패는 조용히
+          console.warn("background refresh failed", e);
+        }finally{
+          orderExistRefreshingPromise = null;
+        }
+      })();
 
-              orderRows = rows.slice(1).filter(r => r && r.length > 1);
+      return orderExistRefreshingPromise;
+    }
 
-              const matchIdx = getMatchIndexFromHeader_();
-              orderIndexMap = new Map();
-              for(const r of orderRows){
-                const k = normalizeOrderNo(r[matchIdx]);
-                if(!k) continue;
-                if(!orderIndexMap.has(k)) orderIndexMap.set(k, []);
-                orderIndexMap.get(k).push(r);
-              }
-              orderLoaded = true;
-              resolve();
-            });
-          });
+    async function ensureOrderAndExistLoaded_(){
+      if(orderLoaded && existLoaded) return;
+      if(orderExistLoadingPromise) return orderExistLoadingPromise;
 
-          await new Promise((resolve)=>{
-            parseCsvWithPapa(existCsv, (results)=>{
-              const rows = results.data || [];
-              const header = (rows[0] || []).map(h => normalizeKey(h));
-              existHeaderMap = new Map();
-              header.forEach((h, idx)=>{ if(h) existHeaderMap.set(h, idx); });
+      orderExistLoadingPromise = (async ()=>{
+        setLoadingUI_(true, "발주/출고 데이터 불러오는 중…");
 
-              existRows = rows.slice(1).filter(r => r && r.length > 1);
+        try{
+          // 0) 캐시 먼저
+          const cachedOrder = loadCache_(ORDER_CACHE_KEY, ORDEREXIST_CACHE_TTL_MS);
+          const cachedExist = loadCache_(EXIST_CACHE_KEY, ORDEREXIST_CACHE_TTL_MS);
 
-              existIndexBySabang = new Map();
-              existIndexByMall = new Map();
+          if(cachedOrder && !orderLoaded) await parseOrderCsv_(cachedOrder);
+          if(cachedExist && !existLoaded) await parseExistCsv_(cachedExist);
 
-              const sabangIdx = existHeaderMap.get("사방넷주문번호") ?? existHeaderMap.get("사방넷 주문번호") ?? null;
-              const mallIdx = existHeaderMap.get("쇼핑몰 주문번호(필수)") ?? existHeaderMap.get("쇼핑몰 주문번호") ?? null;
+          // 캐시로 둘 다 준비되면: 즉시 끝내고, 최신은 백그라운드 갱신
+          if(orderLoaded && existLoaded){
+            setLoadingUI_(false, "로딩 완료 (캐시)");
+            orderExistLoadingPromise = null;
+            refreshOrderExistInBackground_(); // await 안 함
+            return;
+          }
 
-              for(const r of existRows){
-                const sabang = normalizeKey(safeGet(r, sabangIdx));
-                const mall = normalizeOrderNo(safeGet(r, mallIdx));
-                if(sabang){
-                  if(!existIndexBySabang.has(sabang)) existIndexBySabang.set(sabang, []);
-                  existIndexBySabang.get(sabang).push(r);
-                }
-                if(mall){
-                  if(!existIndexByMall.has(mall)) existIndexByMall.set(mall, []);
-                  existIndexByMall.get(mall).push(r);
-                }
-              }
-              existLoaded = true;
-              resolve();
-            });
-          });
+          // 1) 캐시가 없거나 한쪽만 있으면 네트워크로 가져오기(한 번만)
+          const [orderCsv, existCsv] = await Promise.all([
+            fetchCsvSmart(ORDER_CSV_BASE),
+            fetchCsvSmart(EXIST_CSV_BASE),
+          ]);
+
+          if(!looksLikeBadCsv(orderCsv)){
+            saveCache_(ORDER_CACHE_KEY, orderCsv);
+            await parseOrderCsv_(orderCsv);
+          }
+          if(!looksLikeBadCsv(existCsv)){
+            saveCache_(EXIST_CACHE_KEY, existCsv);
+            await parseExistCsv_(existCsv);
+          }
 
           setLoadingUI_(false, "로딩 완료");
-          $("stat2").textContent =
-            `재고 ${stockMap.size.toLocaleString()}개 · 발주 ${orderRows.length.toLocaleString()}건 · 주문번호 ${orderIndexMap.size.toLocaleString()}개 · 출고 ${existRows.length.toLocaleString()}행`;
         }catch(e){
           console.error(e);
           setLoadingUI_(false, "로드 실패: 시트가 '보기 가능' 공개인지 확인하세요.");
@@ -1102,8 +1149,7 @@
         return;
       }
 
-      const showCheckbox = true; // 단일도 체크 가능
-
+      const showCheckbox = true;
 
       let html = `
         <table>
@@ -1150,7 +1196,6 @@
 
       refreshColorDropdownByCurrentRows_();
 
-      // 체크 이벤트: 선택 하이라이트 + 게이트 업데이트
       wrap.querySelectorAll("input.rowChk").forEach(chk=>{
         chk.addEventListener("change", ()=>{
           const tr = chk.closest("tr");
@@ -1164,7 +1209,6 @@
       updateToolbar_();
       updateCopyGateBySelection_();
 
-      // 셀 클릭: (단일 셀) 클립보드 복사
       wrap.querySelectorAll(".copy").forEach(td=>{
         td.addEventListener("click", async ()=>{
           const text = (td.getAttribute("data-copy") || td.textContent || "").trim();
@@ -1176,7 +1220,6 @@
           }
         });
 
-        // hover tip
         td.addEventListener("mouseenter", (e)=>{
           const text = (td.getAttribute("data-copy") || td.textContent || "").trim();
           const t = text.length > 4000 ? (text.slice(0, 4000) + " …") : text;
@@ -1241,7 +1284,6 @@
       const sel = window.getSelection?.();
       if(!wrap || !sel || sel.rangeCount === 0) return [];
 
-      // selection이 테이블 영역 밖이면 무시
       const anchorNode = sel.anchorNode;
       const focusNode = sel.focusNode;
       const inWrap = (n)=> n && (wrap === n || wrap.contains(n));
@@ -1256,11 +1298,7 @@
             const i = Number(tr.dataset.idx);
             if(!Number.isNaN(i)) idxs.push(i);
           }
-        }catch{
-          // 일부 브라우저에서 intersectsNode 예외 가능 -> fallback
-          const r = tr.getBoundingClientRect();
-          // 선택영역 bbox 계산이 어려워서 예외 시는 그냥 무시
-        }
+        }catch{}
       }
       return Array.from(new Set(idxs)).sort((a,b)=>a-b);
     }
@@ -1280,7 +1318,6 @@
         return;
       }
 
-      // 최신 게이트 반영
       updateCopyGateBySelection_();
       if(copyBlocked_){
         showToast("재고 경고로 복사 차단됨");
@@ -1469,10 +1506,8 @@
       if(!e.ctrlKey || e.altKey || e.metaKey) return;
       if(key !== "c") return;
 
-      // 입력 중이면 기본 copy 유지
       if(isTypingTarget_(e.target)) return;
 
-      // 결과가 있고, (체크가 있거나 / 드래그로 테이블 선택 중이거나 / 그냥 결과가 있으면) -> 통째로 복사
       if(lastOutRows && lastOutRows.length > 0){
         e.preventDefault();
         await shortcutCopy_();
@@ -1508,7 +1543,7 @@
 
     /* ===================== 검색/버튼 이벤트 ===================== */
     $("orderInput").addEventListener("keydown", (e)=>{
-      if(e.key === "Enter") search(); // ✅ Enter로 조회
+      if(e.key === "Enter") search();
     });
     $("btnManualApply").addEventListener("click", applyManual);
     $("btnChangeApply").addEventListener("click", applyChange);
@@ -1516,7 +1551,7 @@
 
     /* ===================== 시작 ===================== */
     initHoverTip_();
-    loadStockOnly(); // ✅ 초기 로딩은 재고만
+    loadStockOnly();
   </script>
 </body>
 </html>
