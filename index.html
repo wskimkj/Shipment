@@ -228,12 +228,7 @@
           </div>
         </div>
 
-        <div class="meta">
-          <span id="status">로딩 중…</span>
-          <span id="stat2"></span>
-          <span id="stockSummary"></span>
-          <span id="copyGateMsg"></span>
-        </div>
+    
 
         <!-- 기존 등록 데이터 토글 패널 -->
         <div class="panel" id="existPanel" style="display:none;">
@@ -688,7 +683,7 @@
           $("copyGateMsg").className = "warnline na";
         }
       }else{
-        $("copyGateMsg").textContent = "복사 가능 (Ctrl+C)";
+        $("copyGateMsg").textContent = "";
         $("copyGateMsg").className = "warnline";
       }
     }
@@ -710,10 +705,7 @@
       const types = idxs.map(i => stockStatusByColorCode(lastOutRows[i]["상품컬러코드"]).type);
       gateCopyByTypes(types);
 
-      const checkedCount = getCheckedIndexes_().length;
-      if(checkedCount > 0){
-        $("copyGateMsg").textContent = `선택 ${checkedCount}건 기준: ` + $("copyGateMsg").textContent;
-      }
+   
     }
 
     /* ===================== 기존 데이터(목적/처리) 토글 ===================== */
