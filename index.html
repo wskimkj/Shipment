@@ -1,8 +1,8 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Shipment</title>
 
   <link rel="stylesheet" as="style" crossorigin
@@ -11,575 +11,397 @@
 
   <style>
     :root{
-      --bg:#ffffff;
+      --bg:#f6f7fb;
       --surface:#ffffff;
-      --surface2:#fbfbff;
-      --ink:#18162a;
-      --muted:#6b6780;
+      --text:#0f1222;
+      --muted:#61657b;
+      --line:#e7e8f2;
+      --line2:#dadcf0;
 
-      --line:#ece9ff;
-      --line2:#e2ddff;
+      --p:#6f5cff;
+      --p2:#8d7fff;
+      --pbg: rgba(111,92,255,.10);
 
-      --p:#6f5cff;         /* primary */
-      --p2:#9a8cff;        /* soft primary */
-      --pbg:#f3f1ff;       /* primary bg */
-      --shadow: 0 16px 40px rgba(20, 10, 60, .08);
-      --shadow2: 0 10px 26px rgba(20, 10, 60, .06);
+      --ok:#2e2bbf;
+      --low:#b35b00;
+      --out:#c0132c;
+      --na:#6b6f84;
 
-      --ok:#3a2fe6;
-      --okbg: rgba(111, 92, 255, .10);
-      --okbd: rgba(111, 92, 255, .28);
+      --shadow: 0 10px 24px rgba(17, 18, 40, .08);
+      --shadow2: 0 6px 16px rgba(17, 18, 40, .06);
 
-      --low:#b34d00;
-      --lowbg: rgba(255, 153, 0, .12);
-      --lowbd: rgba(255, 153, 0, .35);
+      --radius: 14px;
 
-      --out:#c1002a;
-      --outbg: rgba(255, 60, 90, .12);
-      --outbd: rgba(255, 60, 90, .35);
+      /* Fixed columns width */
+      --w-idx: 44px;
+      --w-chk: 34px;
+      --w-name: 300px;
 
-      --na:#4a4a60;
-      --nabg: rgba(120,120,150,.10);
-      --nabd: rgba(120,120,150,.25);
-
-      --radius: 18px;
-      --radius2: 14px;
+      /* Dense table */
+      --row-h: 38px;
+      --th-h: 40px;
+      --font: 12.5px;
     }
 
-    *{box-sizing:border-box;font-family:"Pretendard",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
-    body{
-      margin:0;
-      min-height:100vh;
-      background:
-        radial-gradient(900px 520px at 15% 5%, rgba(111,92,255,.10), transparent 60%),
-        radial-gradient(900px 520px at 90% 18%, rgba(154,140,255,.10), transparent 58%),
-        var(--bg);
-      color:var(--ink);
-    }
+    *{ box-sizing:border-box; font-family:"Pretendard",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    body{ margin:0; background:var(--bg); color:var(--text); }
 
-    .app{
-      max-width: 1520px;
+    .app{ max-width: 1640px; margin:0 auto; padding: 0 14px 86px; }
+
+    /* ===== App Bar ===== */
+    .bar{
+      position: sticky;
+      top: 0;
+      z-index: 60;
+      background: rgba(246,247,251,.82);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--line);
+    }
+    .bar-inner{
+      max-width: 1640px;
       margin: 0 auto;
-      padding: 18px 16px 90px;
-    }
-
-    /* ===== Header / Dashboard ===== */
-    .header{
+      padding: 12px 14px;
       display:flex;
-      gap:14px;
-      align-items:stretch;
-      flex-wrap:wrap;
-      margin-bottom: 14px;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+      flex-wrap: wrap;
     }
     .brand{
-      flex: 1 1 260px;
-      background: linear-gradient(180deg, var(--surface), var(--surface2));
-      border: 1px solid var(--line2);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 16px 16px 14px;
-      display:flex;
-      flex-direction:column;
-      justify-content:space-between;
-      min-height: 92px;
-    }
-    .brand-top{
-      display:flex; align-items:center; justify-content:space-between; gap:10px;
-    }
-    .brand-title{
-      font-weight: 1000;
-      font-size: 18px;
-      letter-spacing: -0.2px;
       display:flex;
       align-items:center;
       gap:10px;
+      font-weight: 950;
+      letter-spacing: -0.2px;
+      user-select:none;
+      white-space:nowrap;
     }
-    .dot{
-      width:10px;height:10px;border-radius:50%;
+    .logo{
+      width:10px; height:10px; border-radius: 999px;
       background: var(--p);
       box-shadow: 0 0 0 4px rgba(111,92,255,.12);
     }
-    .links{
-      display:flex; gap:8px; flex-wrap:wrap;
-    }
-    a.pill{
-      text-decoration:none;
-      font-weight: 900;
-      font-size: 12px;
-      padding: 8px 10px;
-      border-radius: 999px;
-      background: var(--pbg);
-      border: 1px solid rgba(111,92,255,.24);
-      color: rgba(35, 25, 90, .92);
-      box-shadow: 0 1px 0 rgba(255,255,255,.7) inset;
-      transition: .12s ease;
-      display:inline-flex; align-items:center; gap:8px;
-      white-space:nowrap;
-    }
-    a.pill:hover{
-      transform: translateY(-1px);
-      border-color: rgba(111,92,255,.42);
-      box-shadow: 0 0 0 4px rgba(111,92,255,.10), 0 1px 0 rgba(255,255,255,.7) inset;
-    }
-    .statusline{
-      margin-top: 10px;
-      display:flex; flex-wrap:wrap; gap:10px; align-items:center;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.2;
-    }
-    .chip{
-      display:inline-flex; align-items:center; gap:8px;
-      padding: 7px 10px;
-      border-radius: 999px;
-      border: 1px solid var(--line2);
-      background: rgba(255,255,255,.85);
-      box-shadow: var(--shadow2);
-      font-weight: 900;
-      color: rgba(30, 22, 70, .92);
-      white-space:nowrap;
-    }
-    .chip .small{
-      font-weight: 800;
-      color: rgba(107,103,128,.95);
-    }
-    .chip.ok{ border-color: var(--okbd); background: var(--okbg); color: rgba(40,25,130,.95); }
-    .chip.low{ border-color: var(--lowbd); background: var(--lowbg); color: rgba(130,60,0,.95); }
-    .chip.out{ border-color: var(--outbd); background: var(--outbg); color: rgba(140,0,35,.98); }
-    .chip.na{ border-color: var(--nabd); background: var(--nabg); color: rgba(70,70,95,.95); }
-
     .controls{
+      display:flex;
+      align-items:center;
+      gap:10px;
       flex: 1 1 520px;
-      background: linear-gradient(180deg, var(--surface), var(--surface2));
-      border: 1px solid var(--line2);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 14px;
-      min-height: 92px;
+      min-width: 280px;
+    }
+    .input{
+      flex: 1;
+      min-width: 240px;
+      height: 40px;
       display:flex;
-      flex-direction:column;
+      align-items:center;
       gap: 10px;
-    }
-
-    .row{
-      display:flex;
-      gap:10px;
-      align-items:center;
-      flex-wrap:wrap;
-    }
-    .field{
-      flex: 1 1 280px;
-      min-width: 260px;
-      display:flex;
-      align-items:center;
-      gap:10px;
-      padding: 10px 12px;
-      border-radius: 14px;
+      padding: 0 12px;
+      background: rgba(255,255,255,.88);
       border: 1px solid var(--line2);
-      background: rgba(255,255,255,.85);
+      border-radius: 12px;
       box-shadow: var(--shadow2);
-      transition: .12s ease;
     }
-    .field:focus-within{
-      border-color: rgba(111,92,255,.55);
-      box-shadow: 0 0 0 4px rgba(111,92,255,.10), var(--shadow2);
-    }
-    .label{
+    .input span{
       font-size: 12px;
       font-weight: 900;
-      color: rgba(107,103,128,.95);
-      white-space: nowrap;
+      color: var(--muted);
+      white-space:nowrap;
     }
-    .field input{
-      width:100%;
+    .input input{
+      width: 100%;
       border:0; outline:0;
       background: transparent;
       font-size: 13px;
-      color: rgba(24, 22, 42, .95);
+      color: var(--text);
     }
-
     .btn{
-      border:0;
-      cursor:pointer;
-      padding: 10px 12px;
-      border-radius: 14px;
-      font-weight: 1000;
-      font-size: 13px;
-      background: rgba(255,255,255,.9);
+      height: 40px;
+      padding: 0 12px;
+      border-radius: 12px;
       border: 1px solid var(--line2);
+      background: rgba(255,255,255,.88);
       box-shadow: var(--shadow2);
-      color: rgba(30, 22, 70, .92);
+      font-weight: 900;
+      color: rgba(20, 18, 40, .92);
+      cursor:pointer;
       transition: .12s ease;
-      white-space:nowrap;
+      white-space: nowrap;
     }
-    .btn:hover{
-      transform: translateY(-1px);
-      border-color: rgba(111,92,255,.45);
-      box-shadow: 0 0 0 4px rgba(111,92,255,.10), var(--shadow2);
-    }
-    .btn:disabled{
-      cursor:not-allowed;
-      opacity:.55;
-      transform:none;
-      box-shadow:none;
-    }
+    .btn:hover{ transform: translateY(-1px); border-color: rgba(111,92,255,.35); box-shadow: 0 0 0 4px rgba(111,92,255,.10), var(--shadow2); }
+    .btn:disabled{ cursor:not-allowed; opacity:.55; transform:none; box-shadow:none; }
     .btn.primary{
-      background: linear-gradient(180deg, rgba(111,92,255,.95), rgba(111,92,255,.86));
       border-color: rgba(111,92,255,.55);
+      background: linear-gradient(180deg, rgba(111,92,255,.92), rgba(111,92,255,.84));
       color: #fff;
     }
-    .btn.primary:hover{
-      box-shadow: 0 0 0 4px rgba(111,92,255,.16), var(--shadow2);
-      border-color: rgba(111,92,255,.70);
-    }
     .btn.danger{
-      background: linear-gradient(180deg, rgba(255, 60, 90, .95), rgba(225, 25, 60, .88));
-      border-color: rgba(255, 60, 90, .55);
+      border-color: rgba(192,19,44,.45);
+      background: linear-gradient(180deg, rgba(255,70,90,.94), rgba(192,19,44,.88));
       color:#fff;
     }
 
-    .seg{
+    .links{
       display:flex;
       align-items:center;
-      gap:10px;
-      flex-wrap:wrap;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content:flex-end;
     }
-    .toggle{
-      display:flex;
+    .pill{
+      height: 40px;
+      display:inline-flex;
       align-items:center;
-      gap:8px;
-      padding: 8px 10px;
+      padding: 0 10px;
       border-radius: 999px;
+      background: rgba(255,255,255,.84);
       border: 1px solid var(--line2);
-      background: rgba(255,255,255,.86);
       box-shadow: var(--shadow2);
-      user-select:none;
-    }
-    .toggle input{ accent-color: var(--p); }
-    .toggle span{
-      font-size: 12px;
+      text-decoration:none;
+      color: rgba(20,18,40,.92);
       font-weight: 900;
-      color: rgba(60,55,90,.92);
+      font-size: 12px;
+      transition: .12s ease;
       white-space:nowrap;
     }
+    .pill:hover{ transform: translateY(-1px); border-color: rgba(111,92,255,.30); box-shadow: 0 0 0 4px rgba(111,92,255,.10), var(--shadow2); }
 
-    /* ===== Layout: Table + Preview ===== */
-    .layout{
-      display:grid;
-      grid-template-columns: 1fr 380px;
-      gap: 14px;
-      align-items:start;
+    /* ===== Status sentence ===== */
+    .status{
+      max-width: 1640px;
+      margin: 0 auto;
+      padding: 10px 14px 12px;
+      color: rgba(40, 38, 70, .92);
+      font-size: 13px;
+      line-height: 1.4;
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      flex-wrap: wrap;
     }
-    @media (max-width: 1120px){
-      .layout{ grid-template-columns: 1fr; }
-      .preview{ position: static; }
-    }
-
-    .panel{
-      background: linear-gradient(180deg, var(--surface), var(--surface2));
+    .status .muted{ color: var(--muted); font-weight: 800; }
+    .status .tag{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 6px 10px;
+      border-radius: 999px;
       border: 1px solid var(--line2);
+      background: rgba(255,255,255,.82);
+      font-size: 12px;
+      font-weight: 900;
+      color: rgba(20,18,40,.92);
+      box-shadow: var(--shadow2);
+      white-space: nowrap;
+    }
+    .tag.ok{ border-color: rgba(111,92,255,.28); background: rgba(111,92,255,.10); color: rgba(55,45,160,.95); }
+    .tag.low{ border-color: rgba(255,153,0,.35); background: rgba(255,153,0,.12); color: rgba(130,65,0,.95); }
+    .tag.out{ border-color: rgba(255,60,90,.35); background: rgba(255,60,90,.12); color: rgba(150,0,35,.98); }
+    .tag.na { border-color: rgba(120,120,150,.25); background: rgba(120,120,150,.10); color: rgba(90,92,110,.95); }
+
+    .spinner{
+      width:14px; height:14px; border-radius:999px;
+      border:2px solid rgba(111,92,255,.20);
+      border-top-color: rgba(111,92,255,.95);
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin{ to{ transform: rotate(360deg);} }
+
+    /* ===== Main surface ===== */
+    .main{
+      margin-top: 12px;
+      background: var(--surface);
+      border: 1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      overflow:hidden;
-    }
-    .panel-head{
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--line);
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-    }
-    .panel-title{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      font-weight: 1000;
-      font-size: 13px;
-      color: rgba(35, 25, 90, .92);
-    }
-    .panel-title .sub{
-      font-weight: 900;
-      color: rgba(107,103,128,.95);
-      font-size: 12px;
+      overflow: hidden;
     }
 
-    /* ===== Table ===== */
     .table-wrap{
-      width:100%;
-      overflow:auto;
-      max-height: 72vh;
+      width: 100%;
+      overflow: auto;
+      max-height: calc(100vh - 200px);
       scrollbar-gutter: stable;
     }
+
     table{
-      width:100%;
-      border-collapse:separate;
-      border-spacing:0;
-      font-size: 12px;
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: var(--font);
     }
+
     thead th{
       position: sticky;
       top: 0;
-      z-index: 5;
+      z-index: 10;
+      height: var(--th-h);
       background: rgba(255,255,255,.92);
+      backdrop-filter: blur(10px);
       border-bottom: 1px solid var(--line);
-      padding: 10px 10px;
-      text-align:left;
-      font-weight: 1000;
-      color: rgba(35, 25, 90, .92);
-      white-space:nowrap;
-      backdrop-filter: blur(8px);
-    }
-    tbody td{
-      padding: 10px 10px;
-      border-bottom: 1px solid rgba(236,233,255,.9);
+      color: rgba(25,22,45,.92);
+      font-weight: 950;
+      text-align: left;
+      padding: 0 10px;
       white-space: nowrap;
-      vertical-align: top;
-      color: rgba(24, 22, 42, .95);
-    }
-    tbody tr:hover{
-      background: rgba(111,92,255,.06);
-    }
-    tbody tr:nth-child(even){
-      background: rgba(251,251,255,.65);
     }
 
-    /* stock state row tint */
-    tbody tr.low{ background: rgba(255, 153, 0, .08) !important; }
-    tbody tr.out{ background: rgba(255, 60, 90, .08) !important; }
-    tbody tr.na { background: rgba(120,120,150,.07) !important; }
-
-    /* selected row */
-    tbody tr.is-selected{
-      outline: 2px solid rgba(111,92,255,.35);
-      outline-offset: -2px;
-      background: rgba(111,92,255,.10) !important;
+    tbody td{
+      height: var(--row-h);
+      border-bottom: 1px solid rgba(231,232,242,.9);
+      padding: 0 10px;
+      color: rgba(18,18,34,.95);
+      white-space: nowrap;
+      vertical-align: middle;
     }
 
-    /* sticky first cols (# + checkbox) */
-    .stickyA, .stickyB{
-      position: sticky;
-      left: 0;
-      z-index: 3;
-      background: inherit;
+    tbody tr:hover{ background: rgba(111,92,255,.06); }
+
+    /* Row left status bar */
+    tbody tr{ position: relative; }
+    tbody tr::before{
+      content:"";
+      position:absolute; left:0; top:0; bottom:0;
+      width: 2px;
+      background: transparent;
     }
-    .stickyB{
-      left: 32px;
-      z-index: 3;
-    }
-    thead .stickyA, thead .stickyB{
-      z-index: 8;
-      background: rgba(255,255,255,.92);
-    }
+    tbody tr.low::before{ background: rgba(255,153,0,.95); }
+    tbody tr.out::before{ background: rgba(255,60,90,.95); }
+    tbody tr.na::before{ background: rgba(120,120,150,.75); }
+    tbody tr.ok::before{ background: transparent; }
+
+    /* Selection focus line (higher priority than status bar) */
+    tbody tr.is-selected::before{ background: rgba(111,92,255,.95); width: 3px; }
+
+    /* Sticky columns */
+    .sticky{ position: sticky; z-index: 8; background: inherit; }
+    .col-idx{ left: 0; min-width: var(--w-idx); max-width: var(--w-idx); }
+    .col-chk{ left: var(--w-idx); min-width: var(--w-chk); max-width: var(--w-chk); text-align:center; }
+    .col-name{ left: calc(var(--w-idx) + var(--w-chk)); min-width: var(--w-name); max-width: var(--w-name); }
+    thead .sticky{ z-index: 20; background: rgba(255,255,255,.92); }
 
     .cell{
-      max-width: 420px;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      cursor: pointer;
+      max-width: 520px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: default;
     }
+    .copyable{ cursor: pointer; }
+    .copyable:hover{ color: rgba(60,45,170,.98); }
 
-    .chkcell{ text-align:center; }
     .rowChk{
-      width: 16px; height: 16px;
+      width: 14px; height: 14px;
       accent-color: var(--p);
-      cursor:pointer;
+      cursor: pointer;
+      opacity: .85;
     }
 
     .nodata{
       padding: 18px 14px;
-      color: rgba(107,103,128,.85);
-      font-size: 12px;
+      color: rgba(97,101,123,.90);
+      font-size: 13px;
       text-align:center;
     }
 
-    /* ===== Preview panel ===== */
-    .preview{
-      position: sticky;
-      top: 14px;
-    }
-    .preview-body{
-      padding: 12px 14px 14px;
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-    }
-    .preview-empty{
-      padding: 10px 12px;
-      border-radius: 14px;
-      border: 1px dashed rgba(111,92,255,.28);
-      background: rgba(111,92,255,.06);
-      color: rgba(80,75,110,.92);
-      font-size: 12px;
-      line-height: 1.35;
-    }
-    .kv{
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: rgba(255,255,255,.86);
-      overflow:hidden;
-    }
-    .kv .k{
-      padding: 8px 10px;
-      font-size: 11px;
-      font-weight: 1000;
-      color: rgba(107,103,128,.92);
-      border-bottom: 1px solid var(--line);
-      background: rgba(251,251,255,.8);
-    }
-    .kv .v{
-      padding: 10px 10px;
-      font-size: 12px;
-      font-weight: 800;
-      color: rgba(24,22,42,.95);
-      white-space: pre-wrap;
-      word-break: break-word;
-      line-height: 1.35;
-    }
-    .preview-actions{
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-      align-items:center;
-      margin-top: 2px;
-    }
-
-    /* ===== Inline badges ===== */
-    .badge{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding: 7px 10px;
-      border-radius: 999px;
-      font-weight: 1000;
-      font-size: 12px;
-      border: 1px solid;
-      white-space:nowrap;
-      box-shadow: var(--shadow2);
-      background: rgba(255,255,255,.86);
-    }
-    .badge.ok { background: var(--okbg); border-color: var(--okbd); color: rgba(40,25,130,.95); }
-    .badge.low{ background: var(--lowbg); border-color: var(--lowbd); color: rgba(130,60,0,.95); }
-    .badge.out{ background: var(--outbg); border-color: var(--outbd); color: rgba(140,0,35,.98); }
-    .badge.na { background: var(--nabg); border-color: var(--nabd); color: rgba(70,70,95,.95); }
-
-    /* ===== Bottom Action Bar ===== */
-    .actionbar{
+    /* ===== Popover preview ===== */
+    .popover{
       position: fixed;
-      left: 50%;
-      transform: translateX(-50%);
-      bottom: 16px;
-      width: min(1100px, calc(100vw - 28px));
-      background: rgba(255,255,255,.92);
-      border: 1px solid var(--line2);
-      border-radius: 18px;
-      box-shadow: 0 18px 60px rgba(20, 10, 60, .14);
-      backdrop-filter: blur(12px);
-      padding: 10px;
+      z-index: 2000;
+      width: min(520px, calc(100vw - 28px));
       display:none;
+      pointer-events: none;
+    }
+    .popover.show{ display:block; }
+    .popover-inner{
+      pointer-events: auto;
+      background: rgba(255,255,255,.96);
+      border: 1px solid rgba(218,220,240,.9);
+      border-radius: 12px;
+      box-shadow: 0 18px 60px rgba(17,18,40,.16);
+      overflow: hidden;
+    }
+    .popover-head{
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      display:flex;
       align-items:center;
       justify-content:space-between;
       gap: 10px;
-      z-index: 2000;
+      background: rgba(250,250,255,.9);
+      font-size: 12px;
+      font-weight: 950;
+      color: rgba(45,40,80,.92);
     }
-    .actionbar.show{ display:flex; }
-    .action-left{
-      display:flex;
-      align-items:center;
-      gap: 10px;
-      flex-wrap:wrap;
-      min-width: 200px;
+    .popover-body{
+      padding: 10px;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: rgba(18,18,34,.95);
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 240px;
+      overflow:auto;
     }
-    .action-right{
-      display:flex;
-      align-items:center;
-      gap: 8px;
-      flex-wrap:wrap;
+    .popover-actions{
+      display:flex; gap:8px; padding: 10px; border-top: 1px solid var(--line);
+      background: rgba(255,255,255,.92);
       justify-content:flex-end;
     }
-    .action-title{
-      font-weight: 1000;
-      font-size: 13px;
-      color: rgba(35, 25, 90, .92);
-      display:flex;
-      align-items:center;
-      gap:10px;
-    }
-    .action-sub{
-      font-size: 12px;
+    .mini{
+      height: 34px;
+      padding: 0 10px;
+      border-radius: 10px;
+      border: 1px solid var(--line2);
+      background: rgba(255,255,255,.9);
       font-weight: 900;
-      color: rgba(107,103,128,.95);
+      cursor:pointer;
+      transition: .12s ease;
+      pointer-events: auto;
     }
-    .warn{
-      padding: 6px 10px;
-      border-radius: 999px;
-      border: 1px solid;
-      font-size: 12px;
-      font-weight: 1000;
-      white-space:nowrap;
+    .mini:hover{ border-color: rgba(111,92,255,.30); box-shadow: 0 0 0 4px rgba(111,92,255,.10); }
+    .mini.primary{
+      border-color: rgba(111,92,255,.50);
+      background: rgba(111,92,255,.92);
+      color:#fff;
     }
-    .warn.ok{ background: var(--okbg); border-color: var(--okbd); color: rgba(40,25,130,.95); }
-    .warn.low{ background: var(--lowbg); border-color: var(--lowbd); color: rgba(130,60,0,.95); }
-    .warn.out{ background: var(--outbg); border-color: var(--outbd); color: rgba(140,0,35,.98); }
-    .warn.na { background: var(--nabg); border-color: var(--nabd); color: rgba(70,70,95,.95); }
 
-    /* ===== Toast ===== */
-    #toast{
-      position: fixed;
-      right: 18px;
-      bottom: 18px;
-      z-index: 9999;
-      padding: 10px 12px;
-      border-radius: 14px;
-      background: rgba(255,255,255,.92);
-      border: 1px solid rgba(111,92,255,.28);
-      box-shadow: var(--shadow);
-      opacity:0;
-      transform: translateY(10px);
-      transition: .18s ease;
-      pointer-events: none;
-      font-weight: 1000;
-      color: rgba(35, 25, 90, .92);
-    }
-    #toast.show{ opacity:1; transform:translateY(0); }
-
-    /* ===== Modal for "full view" ===== */
+    /* ===== Modal ===== */
     .modal-backdrop{
       position: fixed;
       inset: 0;
-      background: rgba(15, 10, 40, .45);
       display:none;
-      align-items:center;
-      justify-content:center;
-      z-index: 3000;
+      align-items: center;
+      justify-content: center;
       padding: 18px;
+      background: rgba(12, 12, 24, .45);
+      z-index: 3000;
     }
     .modal-backdrop.show{ display:flex; }
     .modal{
-      width: min(920px, 96vw);
-      max-height: min(86vh, 780px);
-      overflow:auto;
+      width: min(980px, 96vw);
+      max-height: min(86vh, 800px);
+      overflow: auto;
       background: #fff;
-      border-radius: 18px;
-      border: 1px solid var(--line2);
-      box-shadow: 0 28px 90px rgba(10, 5, 40, .25);
+      border-radius: 14px;
+      border: 1px solid rgba(218,220,240,.95);
+      box-shadow: 0 28px 90px rgba(10, 10, 25, .28);
     }
     .modal-head{
       position: sticky;
       top: 0;
+      z-index: 1;
       background: rgba(255,255,255,.92);
+      backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--line);
-      backdrop-filter: blur(10px);
-      padding: 12px 14px;
+      padding: 10px 12px;
       display:flex;
       align-items:center;
       justify-content:space-between;
       gap: 10px;
     }
     .modal-title{
-      font-weight: 1000;
-      font-size: 13px;
-      color: rgba(35, 25, 90, .92);
+      font-weight: 950;
+      color: rgba(25,22,45,.92);
       display:flex;
       align-items:center;
       gap: 10px;
@@ -588,148 +410,166 @@
       padding: 14px;
       white-space: pre-wrap;
       word-break: break-word;
-      line-height: 1.45;
+      line-height: 1.5;
       font-size: 13px;
-      color: rgba(24, 22, 42, .95);
+      color: rgba(18,18,34,.96);
     }
 
-    /* ===== Small helpers ===== */
-    .spinner{
-      width:14px; height:14px;
-      border-radius: 50%;
-      border: 2px solid rgba(111,92,255,.20);
-      border-top-color: rgba(111,92,255,.90);
-      display:inline-block;
-      animation: spin .8s linear infinite;
-      vertical-align:-2px;
+    /* ===== Bottom action hint (subtle) ===== */
+    .bottom{
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 14px;
+      width: min(1200px, calc(100vw - 28px));
+      z-index: 1000;
+      display:flex;
+      justify-content: space-between;
+      align-items:center;
+      gap: 12px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,.88);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(218,220,240,.95);
+      border-radius: 14px;
+      box-shadow: 0 18px 60px rgba(17,18,40,.14);
     }
-    @keyframes spin{ to{ transform: rotate(360deg);} }
-    .sr{ position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden; }
+    .bottom .left{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      flex-wrap: wrap;
+      color: rgba(40,38,70,.92);
+      font-size: 12.5px;
+      font-weight: 900;
+    }
+    .bottom .right{
+      display:flex; align-items:center; gap: 8px; flex-wrap: wrap;
+    }
+    .bottom .hint{
+      font-weight: 800;
+      color: var(--muted);
+    }
+    .bottom .kbd{
+      padding: 2px 6px;
+      border: 1px solid rgba(218,220,240,.95);
+      border-radius: 8px;
+      background: rgba(255,255,255,.9);
+      font-size: 11px;
+      font-weight: 950;
+      color: rgba(25,22,45,.92);
+    }
+
+    /* ===== Toast ===== */
+    #toast{
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 4000;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.92);
+      border: 1px solid rgba(218,220,240,.95);
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: .16s ease;
+      pointer-events:none;
+      font-weight: 950;
+      color: rgba(25,22,45,.92);
+    }
+    #toast.show{ opacity: 1; transform: translateY(0); }
   </style>
 </head>
 
 <body>
-  <div class="app">
 
-    <!-- ===== Header / Dashboard ===== -->
-    <div class="header">
-      <div class="brand">
-        <div class="brand-top">
-          <div class="brand-title"><span class="dot"></span> Shipment <span class="sr">tool</span></div>
-          <div class="links">
-            <a class="pill" id="orderLink" href="#" target="_blank" rel="noopener noreferrer">발주서</a>
-            <a class="pill" id="stockLink" href="#" target="_blank" rel="noopener noreferrer">재고</a>
-            <a class="pill" id="existLink" href="#" target="_blank" rel="noopener noreferrer">출고</a>
-          </div>
-        </div>
-        <div class="statusline">
-          <span class="chip" id="dashStatus"><span class="small">상태</span> 로딩 중…</span>
-          <span class="chip" id="dashCounts"><span class="small">데이터</span> -</span>
-          <span class="chip" id="dashTarget"><span class="small">복사대상</span> -</span>
-          <span class="chip na" id="dashGate"><span class="small">복사</span> 대기</span>
-        </div>
-      </div>
+  <!-- App Bar -->
+  <div class="bar">
+    <div class="bar-inner">
+      <div class="brand"><span class="logo"></span> Shipment</div>
 
       <div class="controls">
-        <div class="row">
-          <div class="field">
-            <span class="label">주문번호</span>
-            <input id="orderInput" type="text" placeholder="쇼핑몰 주문번호 입력 후 Enter" />
-          </div>
-          <button class="btn primary" id="btnSearch" type="button">조회</button>
-          <button class="btn" id="btnCopy" type="button" disabled>복사</button>
-          <button class="btn" id="btnClear" type="button">초기화</button>
+        <div class="input">
+          <span>주문번호</span>
+          <input id="orderInput" type="text" placeholder="쇼핑몰 주문번호 입력 후 Enter" />
         </div>
+        <button class="btn primary" id="btnSearch" type="button">조회</button>
+        <button class="btn" id="btnCopy" type="button" disabled>복사</button>
+        <button class="btn" id="btnClear" type="button">초기화</button>
+      </div>
 
-        <div class="seg">
-          <label class="toggle" title="기본(중요) 컬럼만 보기 / 상세 컬럼도 보기">
-            <input type="checkbox" id="toggleDetails" />
-            <span>상세 컬럼 보기</span>
-          </label>
-
-          <label class="toggle" title="체크가 없으면 전체, 체크가 있으면 선택만 복사합니다 (A안: 선택 대상에 재고 부족 포함 시 복사 차단)">
-            <input type="checkbox" id="toggleSelectMode" checked />
-            <span>체크 우선 복사</span>
-          </label>
-
-          <span class="chip" id="dashHint"><span class="small">팁</span> 행 클릭 → 우측 미리보기 · 셀 클릭 → 값 복사</span>
-        </div>
+      <div class="links">
+        <a class="pill" id="orderLink" href="#" target="_blank" rel="noopener noreferrer">발주서</a>
+        <a class="pill" id="stockLink" href="#" target="_blank" rel="noopener noreferrer">재고</a>
+        <a class="pill" id="existLink" href="#" target="_blank" rel="noopener noreferrer">출고</a>
       </div>
     </div>
 
-    <!-- ===== Main Layout ===== -->
-    <div class="layout">
-
-      <!-- ===== Left: Table panel ===== -->
-      <div class="panel">
-        <div class="panel-head">
-          <div class="panel-title">검색 결과 <span class="sub" id="resultSub">-</span></div>
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <button class="btn" id="btnSelectAll" type="button" style="display:none;">전체 선택</button>
-            <button class="btn" id="btnSelectNone" type="button" style="display:none;">선택 해제</button>
-          </div>
-        </div>
-        <div class="table-wrap" id="tableWrap">
-          <div class="nodata">검색 결과가 없습니다.</div>
-        </div>
-      </div>
-
-      <!-- ===== Right: Preview ===== -->
-      <div class="panel preview">
-        <div class="panel-head">
-          <div class="panel-title">미리보기 <span class="sub" id="previewSub">선택한 행 없음</span></div>
-          <button class="btn" id="btnPreviewCopyAll" type="button" disabled>행 전체 복사</button>
-        </div>
-        <div class="preview-body" id="previewBody">
-          <div class="preview-empty">
-            왼쪽 표에서 <b>행</b>을 클릭하면 상세가 여기에 정리됩니다.<br/>
-            셀은 클릭하면 해당 값이 바로 복사됩니다.
-          </div>
-        </div>
-      </div>
-
+    <div class="status" id="statusLine">
+      <span class="spinner" aria-hidden="true"></span>
+      <span><b>재고</b> 데이터를 불러오는 중입니다…</span>
+      <span class="muted">· 복사 규칙: 체크가 있으면 선택만, 없으면 전체 · 선택 대상에 LOW/OUT/N/A가 포함되면 복사 차단</span>
     </div>
   </div>
 
-  <!-- Bottom Action Bar (선택 시) -->
-  <div class="actionbar" id="actionBar">
-    <div class="action-left">
-      <div class="action-title">
-        <span class="dot" style="width:9px;height:9px;"></span>
-        <span id="abTitle">선택 0건</span>
-        <span class="action-sub" id="abSub">체크된 항목만 복사</span>
+  <div class="app">
+    <div class="main">
+      <div class="table-wrap" id="tableWrap">
+        <div class="nodata">검색 결과가 없습니다.</div>
       </div>
-      <span class="warn na" id="abWarn">대기</span>
-    </div>
-    <div class="action-right">
-      <button class="btn" id="abCopy" type="button" disabled>선택만 복사</button>
-      <button class="btn" id="abClear" type="button">선택 해제</button>
     </div>
   </div>
 
-  <!-- Toast -->
-  <div id="toast">복사됨</div>
+  <!-- Bottom helper -->
+  <div class="bottom" id="bottomBar" style="display:none;">
+    <div class="left">
+      <span id="bottomText">대기</span>
+      <span class="hint">· 셀 Hover: 미리보기 · 셀 클릭: 값 복사 · 셀 더블클릭: 전체 보기</span>
+    </div>
+    <div class="right">
+      <span class="kbd">Enter</span><span class="hint">조회</span>
+      <span class="kbd">Esc</span><span class="hint">닫기</span>
+    </div>
+  </div>
 
-  <!-- Modal for full view -->
+  <!-- Popover -->
+  <div class="popover" id="popover">
+    <div class="popover-inner">
+      <div class="popover-head">
+        <span id="popTitle">미리보기</span>
+        <span style="opacity:.7; font-weight:900;" id="popMeta"></span>
+      </div>
+      <div class="popover-body" id="popBody"></div>
+      <div class="popover-actions">
+        <button class="mini" id="popCopy" type="button">복사</button>
+        <button class="mini primary" id="popOpen" type="button">전체 보기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal -->
   <div class="modal-backdrop" id="modalBackdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true">
       <div class="modal-head">
-        <div class="modal-title"><span class="dot" style="width:9px;height:9px;"></span> 전체 보기</div>
+        <div class="modal-title"><span class="logo" style="width:9px;height:9px; box-shadow:none;"></span> <span id="modalTitle">전체 보기</span></div>
         <div style="display:flex; gap:8px; align-items:center;">
-          <button class="btn" id="btnModalCopy" type="button">복사</button>
-          <button class="btn" id="btnModalClose" type="button">닫기</button>
+          <button class="btn" id="btnModalCopy" type="button" style="height:36px;">복사</button>
+          <button class="btn" id="btnModalClose" type="button" style="height:36px;">닫기</button>
         </div>
       </div>
       <div class="modal-body" id="modalBody"></div>
     </div>
   </div>
 
+  <!-- Toast -->
+  <div id="toast">복사됨</div>
+
 <script>
-/* =========================================================
-   Data & Constants
-========================================================= */
+/* ===================== 기준 ===================== */
 const LOW_STOCK_THRESHOLD = 10;
 
+/* ===================== 시트 ===================== */
 // 발주서
 const ORDER_SHEET_URL_VIEW =
   "https://docs.google.com/spreadsheets/d/1_Bxfag-90U6u-6JbhxNqeoD9vRns-CpPeXPIJYO1Z5o/edit?gid=518656308#gid=518656308";
@@ -742,17 +582,17 @@ const STOCK_SHEET_URL_VIEW =
 const STOCK_CSV_BASE =
   "https://docs.google.com/spreadsheets/d/1_L12NKkBVU4c5xDPrYLUQRnSUG2NoAwYGWIfPDVO3bM/export?format=csv&gid=366983013";
 
-// 목적/전산 처리 방법(출고) 시트 (필요 시 유지)
+// 출고 시트(현재 UI에 표출은 안 하지만, 기존 코드 호환 위해 로드만 유지)
 const EXIST_SHEET_URL_VIEW =
   "https://docs.google.com/spreadsheets/d/1LPy69E2yPTaSwxFAYrX6qV0BZx1tW0YdonLRNqeo5Vc/edit?gid=0#gid=0";
 const EXIST_CSV_BASE =
   "https://docs.google.com/spreadsheets/d/1LPy69E2yPTaSwxFAYrX6qV0BZx1tW0YdonLRNqeo5Vc/export?format=csv&gid=0";
 
-// Links
 document.getElementById("orderLink").href = ORDER_SHEET_URL_VIEW;
 document.getElementById("stockLink").href = STOCK_SHEET_URL_VIEW;
 document.getElementById("existLink").href = EXIST_SHEET_URL_VIEW;
 
+/* ===================== 강제 포함 B/C/D ===================== */
 // CSV 0-based: A=0, B=1, C=2, D=3
 const EXTRA_COLS = [
   { key: "__B", label: "사방넷주문번호", idx: 1 },
@@ -760,7 +600,7 @@ const EXTRA_COLS = [
   { key: "__D", label: "쇼핑몰", idx: 3 },
 ];
 
-// Output headers (copy)
+/* ===================== 요청 출력 컬럼 ===================== */
 const OUTPUT_HEADERS = [
   "요청일",
   "수령인","배송수단","운송장 번호","받는분연락처","받는분 기타연락처","주소","배송메세지",
@@ -769,12 +609,22 @@ const OUTPUT_HEADERS = [
   "비고"
 ];
 
-// 숨김열(화면)
-const HIDE_IN_VIEW = new Set([
-  "배송수단","운송장 번호","받는분연락처","받는분 기타연락처","주소","배송메세지",
-  "큐텐(한글상품명)","큐텐바코드","쇼핑몰(참고용)","상품명(수집)""비고"
-]);
+/* ===================== 화면 표시 컬럼(세련된 기본 셋) ===================== */
+const VIEW_COLS = [
+  { key:"요청일", label:"요청일" },
+  { key:"__B", label:"사방넷주문번호" },
+  { key:"__C", label:"쇼핑몰 주문번호(필수)" },
+  { key:"__D", label:"쇼핑몰" },
+  { key:"상품명", label:"상품명" },
+  { key:"수량", label:"수량" },
+  { key:"상품컬러코드", label:"상품컬러코드" },
+  { key:"옵션(수집)", label:"옵션(수집)" },
+  { key:"바코드", label:"바코드" },
+  { key:"상품코드", label:"상품코드" },
+  { key:"비고", label:"비고" },
+];
 
+/* 복사용 컬럼(숨김 포함 전체) */
 const TABLE_COLS_COPY = [
   { key: "요청일", label: "요청일" },
   ...EXTRA_COLS.map(c => ({ key:c.key, label:c.label })),
@@ -784,39 +634,23 @@ const TABLE_COLS_COPY = [
     .map(h => ({ key:h, label:h }))
 ];
 
-const TABLE_COLS_VIEW_ALL = TABLE_COLS_COPY.filter(c => !HIDE_IN_VIEW.has(c.label));
-
-// 기본(중요) 컬럼만
-const DEFAULT_VIEW_LABELS = new Set([
-  "요청일","사방넷주문번호","쇼핑몰 주문번호(필수)","쇼핑몰",
-  "상품명","수량","상품컬러코드","옵션(수집)","바코드","상품코드","비고"
-]);
-
-function getCurrentViewCols_(){
-  const showDetails = $("toggleDetails")?.checked;
-  if(showDetails) return TABLE_COLS_VIEW_ALL;
-  return TABLE_COLS_VIEW_ALL.filter(c => DEFAULT_VIEW_LABELS.has(c.label));
-}
-
-// 대충 폭(ellipsis용)
+/* 컬럼 폭(일부만) */
 const COL_WIDTH = {
-  "요청일": 86,
-  "사방넷주문번호": 120,
-  "쇼핑몰 주문번호(필수)": 160,
+  "요청일": 110,
+  "사방넷주문번호": 130,
+  "쇼핑몰 주문번호(필수)": 170,
   "쇼핑몰": 120,
-  "상품명": 320,
+  "상품명": 420,
   "수량": 70,
-  "바코드": 140,
-  "상품코드": 110,
-  "상품컬러코드": 140,
+  "상품컬러코드": 150,
   "옵션(수집)": 140,
-  "비고": 180,
-  "_default": 120
+  "바코드": 140,
+  "상품코드": 120,
+  "비고": 220,
+  "_default": 140
 };
 
-/* =========================================================
-   Utilities
-========================================================= */
+/* ===================== 유틸 ===================== */
 const $ = (id)=>document.getElementById(id);
 
 function showToast(msg="복사됨"){
@@ -832,12 +666,8 @@ function normalizeKey(v){
     .trim();
 }
 function normalizeOrderNo(v){ return normalizeKey(v); }
-
 function normColorCode(v){
   return normalizeKey(v).replace(/\s+/g,"").replace(/-/g,"").toUpperCase();
-}
-function normProductCode_(v){
-  return normalizeKey(v).replace(/\s+/g,"").toUpperCase();
 }
 function toNumber(v){
   const n = String(v ?? "").replace(/[^0-9.-]/g,"");
@@ -855,7 +685,6 @@ function safeGet(row, idx){
   if(!row || idx == null || idx < 0) return "";
   return (row[idx] ?? "");
 }
-
 function withCacheBust(url){
   const sep = url.includes("?") ? "&" : "?";
   return `${url}${sep}_=${Date.now()}`;
@@ -863,7 +692,7 @@ function withCacheBust(url){
 function looksLikeBadCsv(text){
   const t = String(text || "").trim();
   if(!t) return true;
-  const head = t.slice(0, 200).toLowerCase();
+  const head = t.slice(0, 220).toLowerCase();
   if(head.includes("<!doctype") || head.includes("<html") || head.includes("servicelogin")) return true;
   if(t.length < 30) return true;
   return false;
@@ -889,40 +718,19 @@ async function fetchCsvSmart(baseUrl, timeoutMs=9000){
   return t2 || t1;
 }
 
-function setDashStatus_(text, loading=false){
-  const el = $("dashStatus");
-  if(!el) return;
-  el.innerHTML = loading
-    ? `<span class="small">상태</span> <span class="spinner"></span> ${escapeHtml(text)}`
-    : `<span class="small">상태</span> ${escapeHtml(text)}`;
+/* ===================== Status sentence ===================== */
+function setStatusSentence_(html){
+  $("statusLine").innerHTML = html;
 }
-function setDashCounts_(text){
-  const el = $("dashCounts");
-  if(!el) return;
-  el.innerHTML = `<span class="small">데이터</span> ${escapeHtml(text)}`;
-}
-function setDashTarget_(text){
-  const el = $("dashTarget");
-  if(!el) return;
-  el.innerHTML = `<span class="small">복사대상</span> ${escapeHtml(text)}`;
-}
-function setDashGate_(type, text){
-  const el = $("dashGate");
-  if(!el) return;
-  el.className = `chip ${type || "na"}`;
-  el.innerHTML = `<span class="small">복사</span> ${escapeHtml(text)}`;
+function tagHtml(type, text){
+  const cls = type === "ok" ? "tag ok"
+            : type === "low" ? "tag low"
+            : type === "out" ? "tag out"
+            : "tag na";
+  return `<span class="${cls}">${escapeHtml(text)}</span>`;
 }
 
-function badgeTextByType_(type, counts){
-  if(type === "out") return `OUT ${counts.out}건`;
-  if(type === "low") return `LOW ${counts.low}건`;
-  if(type === "na")  return `N/A ${counts.na}건`;
-  return `OK ${counts.ok}건`;
-}
-
-/* =========================================================
-   CSV parsing
-========================================================= */
+/* ===================== 파서 ===================== */
 function parseCsvWithPapa(csvText, onDone){
   Papa.parse(csvText, {
     skipEmptyLines: true,
@@ -931,39 +739,17 @@ function parseCsvWithPapa(csvText, onDone){
   });
 }
 
-/* =========================================================
-   Stock Maps
-========================================================= */
+/* ===================== 재고 ===================== */
 let stockMap = new Map();
-let stockInfoMap = new Map();
 let stockLoaded = false;
-
-function buildStockMapsFromParsed_(results){
-  const rows = (results.data || []).slice(1).filter(r => r && r.length > 0);
-  stockMap = new Map();
-  stockInfoMap = new Map();
-
-  for(const r of rows){
-    const code = normColorCode(r[0]);
-    if(!code) continue;
-
-    const name = normalizeKey(r[5]);      // F
-    const colorName = normalizeKey(r[8]); // I
-    const qty = toNumber(r[10]);          // K
-
-    stockMap.set(code, qty);
-    stockInfoMap.set(code, { qty, name, colorName });
-  }
-}
 
 function stockStatusByColorCode(colorCodeRaw){
   const code = normColorCode(colorCodeRaw);
   if(!code) return { type:"na", label:"재고 미등록", qty:null };
   if(!stockMap.has(code)) return { type:"na", label:"재고 미등록", qty:null };
-
   const qty = stockMap.get(code);
   if(qty <= 0) return { type:"out", label:`재고 0`, qty };
-  if(qty < LOW_STOCK_THRESHOLD) return { type:"low", label:`재고 ${qty} (${LOW_STOCK_THRESHOLD} 미만)`, qty };
+  if(qty < LOW_STOCK_THRESHOLD) return { type:"low", label:`재고 ${qty} (<${LOW_STOCK_THRESHOLD})`, qty };
   return { type:"ok", label:`재고 ${qty}`, qty };
 }
 function stockQtyLabel_(colorCodeRaw){
@@ -983,29 +769,20 @@ function attachStockToRequestDate_(reqDate, colorCode){
   const tag = `[재고:${qtyLabel}]`;
   return base ? `${base}  ${tag}` : tag;
 }
-function colorNameFromStock_(colorCodeRaw){
-  const code = normColorCode(colorCodeRaw);
-  if(!code) return "";
-  const info = stockInfoMap.get(code);
-  return (info?.colorName || "").trim();
-}
-function nameFromStock_(colorCodeRaw){
-  const code = normColorCode(colorCodeRaw);
-  if(!code) return "";
-  const info = stockInfoMap.get(code);
-  if(!info) return "";
-  const a = (info.name || "").trim();
-  const b = (info.colorName || "").trim();
-  if(a && b) return `${a} ${b}`;
-  return a || b || "";
+function buildStockMapsFromParsed_(results){
+  const rows = (results.data || []).slice(1).filter(r => r && r.length > 0);
+  stockMap = new Map();
+  for(const r of rows){
+    const code = normColorCode(r[0]);
+    if(!code) continue;
+    const qty = toNumber(r[10]);
+    stockMap.set(code, qty);
+  }
 }
 
-/* =========================================================
-   Stock cache (10 min)
-========================================================= */
+/* ===================== localStorage 캐시 (재고만) ===================== */
 const STOCK_CACHE_KEY = "SHIPMENT_STOCK_CSV_CACHE_V1";
 const STOCK_CACHE_TTL_MS = 10 * 60 * 1000;
-
 function loadStockCache_(){
   try{
     const raw = localStorage.getItem(STOCK_CACHE_KEY);
@@ -1017,14 +794,45 @@ function loadStockCache_(){
   }catch{ return null; }
 }
 function saveStockCache_(csv){
-  try{
-    localStorage.setItem(STOCK_CACHE_KEY, JSON.stringify({ ts: Date.now(), csv }));
-  }catch{}
+  try{ localStorage.setItem(STOCK_CACHE_KEY, JSON.stringify({ ts: Date.now(), csv })); }catch{}
 }
 
-/* =========================================================
-   Order/Exist Load (Lazy)
-========================================================= */
+async function loadStockOnly(){
+  setStatusSentence_(`<span class="spinner"></span><span><b>재고</b> 데이터를 불러오는 중입니다…</span><span class="muted">· 복사 규칙: 체크가 있으면 선택만, 없으면 전체 · 선택 대상에 LOW/OUT/N/A가 포함되면 복사 차단</span>`);
+  $("bottomBar").style.display = "";
+
+  try{
+    const cached = loadStockCache_();
+    if(cached){
+      await new Promise((resolve)=>{
+        parseCsvWithPapa(cached, (results)=>{ buildStockMapsFromParsed_(results); resolve(); });
+      });
+      stockLoaded = true;
+      setStatusSentence_(`<span>${tagHtml("ok","재고 캐시 로딩")}</span><span class="muted">재고 ${stockMap.size.toLocaleString()}개 · 발주/출고는 조회 시 불러옵니다</span>`);
+    }
+
+    const stockCsv = await fetchCsvSmart(STOCK_CSV_BASE);
+    if(!looksLikeBadCsv(stockCsv)){
+      saveStockCache_(stockCsv);
+      await new Promise((resolve)=>{
+        parseCsvWithPapa(stockCsv, (results)=>{ buildStockMapsFromParsed_(results); resolve(); });
+      });
+      stockLoaded = true;
+      setStatusSentence_(`<span>${tagHtml("ok","재고 로딩 완료")}</span><span class="muted">재고 ${stockMap.size.toLocaleString()}개 · 발주/출고는 조회 시 불러옵니다</span>`);
+    }else{
+      if(!stockLoaded){
+        setStatusSentence_(`${tagHtml("out","재고 로드 실패")}<span class="muted">시트 공개(보기 가능) 여부를 확인하세요</span>`);
+      }
+    }
+  }catch(e){
+    console.error(e);
+    if(!stockLoaded){
+      setStatusSentence_(`${tagHtml("out","재고 로드 실패")}<span class="muted">시트 공개(보기 가능) 여부를 확인하세요</span>`);
+    }
+  }
+}
+
+/* ===================== 발주/출고 Lazy Load ===================== */
 let orderLoaded = false;
 let existLoaded = false;
 let orderExistLoadingPromise = null;
@@ -1032,9 +840,6 @@ let orderExistLoadingPromise = null;
 let orderRows = [];
 let orderIndexMap = new Map();
 let headerIndexMap = new Map();
-
-let existRows = [];
-let existHeaderMap = new Map();
 
 function getMatchIndexFromHeader_(){
   const idx = headerIndexMap.get("쇼핑몰 주문번호(필수)");
@@ -1050,7 +855,7 @@ async function ensureOrderAndExistLoaded_(){
   if(orderExistLoadingPromise) return orderExistLoadingPromise;
 
   orderExistLoadingPromise = (async ()=>{
-    setDashStatus_("발주/출고 불러오는 중…", true);
+    setStatusSentence_(`<span class="spinner"></span><span><b>발주/출고</b> 데이터를 불러오는 중입니다…</span>`);
     $("btnSearch").disabled = true;
     try{
       const [orderCsv, existCsv] = await Promise.all([
@@ -1076,31 +881,20 @@ async function ensureOrderAndExistLoaded_(){
             if(!orderIndexMap.has(k)) orderIndexMap.set(k, []);
             orderIndexMap.get(k).push(r);
           }
-
           orderLoaded = true;
           resolve();
         });
       });
 
+      // exist는 현재 UI에 표시 안 하지만, 로딩 성공 여부 정도만
       await new Promise((resolve)=>{
-        parseCsvWithPapa(existCsv, (results)=>{
-          const rows = results.data || [];
-          const header = (rows[0] || []).map(h => normalizeKey(h));
-
-          existHeaderMap = new Map();
-          header.forEach((h, idx)=>{ if(h) existHeaderMap.set(h, idx); });
-
-          existRows = rows.slice(1).filter(r => r && r.length > 1);
-          existLoaded = true;
-          resolve();
-        });
+        parseCsvWithPapa(existCsv, ()=>{ existLoaded = true; resolve(); });
       });
 
-      setDashStatus_("로딩 완료");
-      setDashCounts_(`재고 ${stockMap.size.toLocaleString()} · 발주 ${orderRows.length.toLocaleString()} · 주문번호 ${orderIndexMap.size.toLocaleString()} · 출고 ${existRows.length.toLocaleString()}`);
+      setStatusSentence_(`${tagHtml("ok","준비 완료")}<span class="muted">주문번호 입력 후 조회하세요</span>`);
     }catch(e){
       console.error(e);
-      setDashStatus_("로드 실패: 시트 공개(보기 가능) 확인");
+      setStatusSentence_(`${tagHtml("out","로드 실패")}<span class="muted">시트가 '보기 가능' 공개인지 확인하세요</span>`);
       throw e;
     }finally{
       $("btnSearch").disabled = false;
@@ -1111,9 +905,7 @@ async function ensureOrderAndExistLoaded_(){
   return orderExistLoadingPromise;
 }
 
-/* =========================================================
-   Build Out rows
-========================================================= */
+/* ===================== out row 생성 ===================== */
 function buildOutFromSheetRow(row){
   const o = {};
 
@@ -1124,135 +916,224 @@ function buildOutFromSheetRow(row){
   for(const h of OUTPUT_HEADERS){
     if(h === "배송수단"){ o[h] = "택배"; continue; }
     if(h === "운송장 번호"){ o[h] = ""; continue; }
-
-    if(h === "상품명"){
-      o[h] = safeGet(row, 11) || "";
-      continue;
-    }
-
-    if(h === "재고"){
-      o[h] = "";
-      continue;
-    }
+    if(h === "상품명"){ o[h] = safeGet(row, 11) || ""; continue; }
 
     const idx = headerIndexMap.get(h);
     o[h] = safeGet(row, idx);
   }
 
-  o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
   o["요청일"] = attachStockToRequestDate_(o["요청일"], o["상품컬러코드"]);
+  o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
 
   return o;
 }
 
-/* =========================================================
-   State
-========================================================= */
+/* ===================== 상태 ===================== */
 let lastOutRows = [];
 let lastStockTypes = [];
-let originalOutRows = [];
-let lastSource = "none";
 
-let selectedRowIndexForPreview = null;
-
-/* =========================================================
-   Selection + Copy Target (A안)
-   - "체크 우선 복사" ON: 체크 있으면 체크된 행만, 없으면 전체
-   - OFF: 항상 전체
-========================================================= */
+/* ===================== 선택/복사 규칙 (요구사항 반영) ===================== */
+/* - 체크가 있으면: 체크된 행만 복사
+   - 체크가 없으면: 전체 복사
+   - 복사 대상(선택/전체)에 LOW/OUT/N/A 포함이면 복사 차단 (A안)
+*/
 function getCheckedIndexes_(){
   const wrap = $("tableWrap");
   const chks = wrap.querySelectorAll("input.rowChk:checked");
   return Array.from(chks).map(c => Number(c.dataset.idx)).filter(n => !Number.isNaN(n));
 }
-
 function getCopyTargetIndexes_(){
   if(!lastOutRows || lastOutRows.length === 0) return [];
-  const preferCheck = $("toggleSelectMode")?.checked;
-
-  if(preferCheck){
-    const checked = getCheckedIndexes_();
-    return checked.length ? checked : lastOutRows.map((_, i)=>i);
-  }
-  return lastOutRows.map((_, i)=>i);
+  const checked = getCheckedIndexes_();
+  return checked.length ? checked : lastOutRows.map((_, i)=>i);
 }
-
-function computeTypesByIndexes_(idxs){
+function summarizeTypesByIndexes_(idxs){
   const counts = { ok:0, low:0, out:0, na:0 };
-  const types = idxs.map(i => {
+  for(const i of idxs){
     const t = stockStatusByColorCode(lastOutRows[i]?.["상품컬러코드"]).type;
     counts[t] = (counts[t] || 0) + 1;
-    return t;
-  });
-  return { types, counts };
+  }
+  return counts;
 }
-
-function gateBySelection_(){
-  const idxs = getCopyTargetIndexes_();
-  const checkedCount = getCheckedIndexes_().length;
+function computeGate_(){
   const total = lastOutRows.length;
+  const checked = getCheckedIndexes_();
+  const targetIdxs = getCopyTargetIndexes_();
+  const counts = summarizeTypesByIndexes_(targetIdxs);
 
-  // target label
-  const targetLabel =
-    (idxs.length === 0) ? "-" :
-    (checkedCount > 0 && $("toggleSelectMode")?.checked) ? `선택 ${checkedCount}/${total}` :
-    `전체 ${total}`;
-
-  setDashTarget_(targetLabel);
-
-  const { counts } = computeTypesByIndexes_(idxs);
   const blocked = (counts.low + counts.out + counts.na) > 0;
-
-  // choose dominant warning type priority out > low > na > ok
   let gateType = "ok";
-  let gateText = "복사 가능";
+  let gateMsg = "복사 가능";
   if(blocked){
-    if(counts.out > 0){ gateType = "out"; gateText = "차단: OUT 포함"; }
-    else if(counts.low > 0){ gateType = "low"; gateText = `차단: LOW(<${LOW_STOCK_THRESHOLD}) 포함`; }
-    else { gateType = "na"; gateText = "차단: N/A 포함"; }
+    if(counts.out) { gateType="out"; gateMsg="선택 대상에 OUT(재고 0)이 포함되어 복사할 수 없습니다."; }
+    else if(counts.low){ gateType="low"; gateMsg=`선택 대상에 LOW(재고 < ${LOW_STOCK_THRESHOLD})가 포함되어 복사할 수 없습니다.`; }
+    else { gateType="na"; gateMsg="선택 대상에 N/A(재고 미등록)가 포함되어 복사할 수 없습니다."; }
   }
 
-  // main copy button & action bar copy button
-  $("btnCopy").disabled = blocked || idxs.length === 0;
+  const scopeText = checked.length ? `선택 ${checked.length}건` : (total ? `전체 ${total}건` : "-");
+  const badge = blocked ? tagHtml(gateType, "복사 차단") : tagHtml("ok", "복사 가능");
+
+  if(total === 0){
+    $("btnCopy").disabled = true;
+    $("btnCopy").classList.remove("danger");
+    setStatusSentence_(`${tagHtml("na","대기")}<span class="muted">주문번호를 조회하면 결과가 표시됩니다</span>`);
+    $("bottomText").textContent = "대기";
+    return { blocked:true, targetIdxs:[], checkedCount:0, total:0 };
+  }
+
+  $("btnCopy").disabled = blocked;
   $("btnCopy").classList.toggle("danger", blocked);
 
-  // dash gate chip
-  setDashGate_(gateType, gateText);
+  const countTag = checked.length ? tagHtml("ok", `복사대상: 선택 ${checked.length}`) : tagHtml("na", `복사대상: 전체 ${total}`);
+  const mixTag = (counts.out||counts.low||counts.na)
+    ? [
+        counts.out ? tagHtml("out", `OUT ${counts.out}`) : "",
+        counts.low ? tagHtml("low", `LOW ${counts.low}`) : "",
+        counts.na  ? tagHtml("na",  `N/A ${counts.na}`) : "",
+        counts.ok  ? tagHtml("ok",  `OK ${counts.ok}`) : "",
+      ].join(" ")
+    : tagHtml("ok", `OK ${counts.ok}`);
 
-  // action bar
-  const ab = $("actionBar");
-  const abTitle = $("abTitle");
-  const abWarn = $("abWarn");
-  const abCopy = $("abCopy");
+  setStatusSentence_(
+    `${badge} ${countTag} ${mixTag} <span class="muted">· ${escapeHtml(gateMsg)} ·</span> <span class="muted">규칙: 체크 있으면 선택만, 없으면 전체</span>`
+  );
 
-  const showAction = ($("toggleSelectMode")?.checked && checkedCount > 0);
-  ab.classList.toggle("show", showAction);
-
-  if(showAction){
-    abTitle.textContent = `선택 ${checkedCount}건`;
-    $("abSub").textContent = "체크된 항목만 복사";
-    abWarn.className = `warn ${gateType}`;
-    abWarn.textContent =
-      blocked ? gateText.replace("차단: ", "⚠ ") : "OK · 복사 가능";
-    abCopy.disabled = blocked || checkedCount === 0;
-    abCopy.className = blocked ? "btn danger" : "btn primary";
-  }
-
-  // result subtitle
-  $("resultSub").textContent = (total ? `${total.toLocaleString()}건` : "-");
-
-  return { blocked, gateType, gateText, counts, idxs, checkedCount, total };
+  $("bottomText").textContent = `총 ${total}건 · ${scopeText} · ${blocked ? "복사 차단" : "복사 가능"}`;
+  return { blocked, targetIdxs, checkedCount: checked.length, total, gateMsg };
 }
 
-/* =========================================================
-   Copy build
-========================================================= */
-function buildTSV(outRows){
-  const INCLUDE_HEADER_ROW = false;
-  const lines = [];
-  if(INCLUDE_HEADER_ROW){
-    lines.push(TABLE_COLS_COPY.map(c => c.label).join("\t"));
+/* ===================== 렌더 ===================== */
+function renderTable(outRows){
+  const wrap = $("tableWrap");
+  lastOutRows = outRows || [];
+  lastStockTypes = (outRows || []).map(o => stockStatusByColorCode(o["상품컬러코드"]).type);
+
+  if(!outRows || outRows.length === 0){
+    wrap.innerHTML = `<div class="nodata">검색 결과가 없습니다.</div>`;
+    computeGate_();
+    return;
   }
+
+  let html = `<table>
+    <thead>
+      <tr>
+        <th class="sticky col-idx">#</th>
+        <th class="sticky col-chk">✓</th>
+        <th class="sticky col-name">${escapeHtml("상품명")}</th>
+        ${VIEW_COLS.filter(c=>c.label!=="상품명").map(c=>{
+          const w = COL_WIDTH[c.label] || COL_WIDTH["_default"];
+          return `<th style="min-width:${w}px; max-width:${w}px;">${escapeHtml(c.label)}</th>`;
+        }).join("")}
+      </tr>
+    </thead>
+    <tbody>`;
+
+  outRows.forEach((o, i)=>{
+    const t = lastStockTypes[i] || "na";
+    const trCls = t;
+
+    const name = String(o["상품명"] ?? "");
+    const cells = VIEW_COLS.filter(c=>c.label!=="상품명").map(c=>{
+      const w = COL_WIDTH[c.label] || COL_WIDTH["_default"];
+      const raw = String(o[c.key] ?? "");
+      return `<td class="cell copyable"
+                data-row="${i}"
+                data-key="${escapeHtml(c.label)}"
+                data-full="${escapeHtml(raw)}"
+                style="min-width:${w}px; max-width:${w}px;"
+              >${escapeHtml(raw)}</td>`;
+    }).join("");
+
+    html += `<tr class="${trCls}" data-row="${i}">
+      <td class="sticky col-idx cell copyable" data-row="${i}" data-key="#" data-full="${escapeHtml(String(i+1))}">${i+1}</td>
+      <td class="sticky col-chk" style="text-align:center;">
+        <input type="checkbox" class="rowChk" data-idx="${i}">
+      </td>
+      <td class="sticky col-name cell copyable"
+          data-row="${i}"
+          data-key="상품명"
+          data-full="${escapeHtml(name)}"
+      >${escapeHtml(name)}</td>
+      ${cells}
+    </tr>`;
+  });
+
+  html += `</tbody></table>`;
+  wrap.innerHTML = html;
+
+  // checkbox selection
+  wrap.querySelectorAll("input.rowChk").forEach(chk=>{
+    chk.addEventListener("change", ()=>{
+      const tr = chk.closest("tr");
+      if(tr) tr.classList.toggle("is-selected", chk.checked);
+      computeGate_();
+    });
+  });
+
+  // copy on click
+  wrap.querySelectorAll("td.copyable").forEach(td=>{
+    td.addEventListener("click", async (e)=>{
+      const text = (td.getAttribute("data-full") || td.textContent || "").trim();
+      if(!text){ showToast("빈 값"); return; }
+      try{
+        await navigator.clipboard.writeText(text);
+        showToast("값 복사됨");
+      }catch{ showToast("복사 실패"); }
+    });
+
+    td.addEventListener("dblclick", ()=>{
+      const key = td.getAttribute("data-key") || "값";
+      const text = (td.getAttribute("data-full") || td.textContent || "").trim();
+      openModal_(`${key}\n\n${text}`, `${key} 전체 보기`);
+    });
+
+    td.addEventListener("mouseenter", (e)=> showPopover_(td, e));
+    td.addEventListener("mousemove", (e)=> movePopover_(e));
+    td.addEventListener("mouseleave", ()=> hidePopover_());
+  });
+
+  computeGate_();
+}
+
+/* ===================== 검색 ===================== */
+async function search(){
+  const orderNo = normalizeOrderNo($("orderInput").value);
+
+  if(!orderNo){
+    $("tableWrap").innerHTML = `<div class="nodata">주문번호를 입력해주세요.</div>`;
+    computeGate_();
+    return;
+  }
+  if(!stockLoaded){
+    $("tableWrap").innerHTML = `<div class="nodata">재고가 아직 로딩 중입니다…</div>`;
+    return;
+  }
+
+  $("tableWrap").innerHTML = `<div class="nodata"><span class="spinner"></span> 조회 중…</div>`;
+  setStatusSentence_(`<span class="spinner"></span><span><b>조회</b> 중입니다…</span>`);
+
+  if(!orderLoaded || !existLoaded){
+    try{ await ensureOrderAndExistLoaded_(); }
+    catch{
+      $("tableWrap").innerHTML = `<div class="nodata">발주/출고 시트를 불러오지 못했습니다. (시트 공개 확인)</div>`;
+      return;
+    }
+  }
+
+  const rows = orderIndexMap.get(orderNo) || [];
+  if(rows.length === 0){
+    $("tableWrap").innerHTML = `<div class="nodata">발주서에서 주문번호를 찾지 못했습니다.</div>`;
+    computeGate_();
+    return;
+  }
+
+  const outRows = rows.map(r => buildOutFromSheetRow(r));
+  renderTable(outRows);
+}
+
+/* ===================== 복사 ===================== */
+function buildTSV(outRows){
+  const lines = [];
   outRows.forEach(o=>{
     const vals = TABLE_COLS_COPY.map(c =>
       String(o[c.key] ?? "").replace(/\t/g," ").replace(/\r?\n/g," ")
@@ -1270,17 +1151,12 @@ function buildHTMLTable(outRows){
     return `<tr>${tds}</tr>`;
   }).join("");
 
-  return `
-    <table style="border-collapse:collapse;">
-      <tbody>${tbody}</tbody>
-    </table>
-  `.trim();
+  return `<table style="border-collapse:collapse;"><tbody>${tbody}</tbody></table>`;
 }
 
 async function copyRows_(rowsToCopy){
   const tsv = buildTSV(rowsToCopy);
   const html = buildHTMLTable(rowsToCopy);
-
   try{
     await navigator.clipboard.write([
       new ClipboardItem({
@@ -1299,91 +1175,97 @@ async function copyRows_(rowsToCopy){
   }
 }
 
-/* =========================================================
-   Preview
-========================================================= */
-function renderPreviewForRow_(idx){
-  const body = $("previewBody");
-  const sub = $("previewSub");
-  const btnAll = $("btnPreviewCopyAll");
+$("btnCopy").addEventListener("click", async ()=>{
+  if(!lastOutRows || lastOutRows.length === 0){ showToast("복사할 결과 없음"); return; }
+  const gate = computeGate_();
+  if(gate.blocked){ showToast("재고 경고로 복사 차단됨"); return; }
+  const rowsToCopy = gate.targetIdxs.map(i => lastOutRows[i]);
+  await copyRows_(rowsToCopy);
+});
 
-  selectedRowIndexForPreview = (idx == null ? null : idx);
+$("btnClear").addEventListener("click", ()=>{
+  $("orderInput").value = "";
+  lastOutRows = [];
+  lastStockTypes = [];
+  $("tableWrap").innerHTML = `<div class="nodata">검색 결과가 없습니다.</div>`;
+  computeGate_();
+});
 
-  if(idx == null || !lastOutRows[idx]){
-    sub.textContent = "선택한 행 없음";
-    btnAll.disabled = true;
-    body.innerHTML = `
-      <div class="preview-empty">
-        왼쪽 표에서 <b>행</b>을 클릭하면 상세가 여기에 정리됩니다.<br/>
-        셀은 클릭하면 해당 값이 바로 복사됩니다.
-      </div>
-    `;
-    return;
-  }
+/* ===================== Enter 검색 ===================== */
+$("orderInput").addEventListener("keydown", (e)=>{
+  if(e.key === "Enter") search();
+});
+$("btnSearch").addEventListener("click", search);
 
-  const row = lastOutRows[idx];
-  const st = stockStatusByColorCode(row["상품컬러코드"]);
-  const badgeClass = st.type;
+/* ===================== Popover ===================== */
+let popPinnedCell = null; // optional future pin
+let popCurrent = { key:"", text:"", row: null };
 
-  sub.textContent = `#${idx+1} · ${row["__C"] ? "주문번호 있음" : "주문번호 없음"}`;
-  btnAll.disabled = false;
+function showPopover_(td, evt){
+  const key = td.getAttribute("data-key") || "";
+  const text = (td.getAttribute("data-full") || td.textContent || "").trim();
 
-  // 핵심 요약
-  const summaryName = (row["상품명"] || "").trim();
-  const summaryColor = (row["옵션(수집)"] || "").trim();
-  const summaryQty = (row["수량"] || "").trim();
-  const summaryCode = (row["상품컬러코드"] || "").trim();
+  // 너무 짧으면 굳이 안 띄움(원하면 제거 가능)
+  if(text.length <= 16) return;
 
-  // build kv blocks
-  const blocks = [];
+  popCurrent = {
+    key,
+    text,
+    row: td.getAttribute("data-row")
+  };
 
-  blocks.push(`
-    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-      <span class="badge ${badgeClass}">${escapeHtml(st.label)}</span>
-      <span class="badge ok">재고표기: ${escapeHtml(stockQtyLabel_(summaryCode))}</span>
-    </div>
-  `);
+  $("popTitle").textContent = key || "미리보기";
+  $("popMeta").textContent = popCurrent.row != null ? `#${Number(popCurrent.row)+1}` : "";
+  $("popBody").textContent = text;
 
-  blocks.push(kv_("상품", `${summaryName}${summaryColor ? " / " + summaryColor : ""}`));
-  blocks.push(kv_("수량", summaryQty || "-"));
-  blocks.push(kv_("상품컬러코드", summaryCode || "-"));
-  blocks.push(kv_("사방넷주문번호", String(row["__B"] || "-")));
-  blocks.push(kv_("쇼핑몰 주문번호", String(row["__C"] || "-")));
-  blocks.push(kv_("쇼핑몰", String(row["__D"] || "-")));
+  const pop = $("popover");
+  pop.classList.add("show");
+  movePopover_(evt);
+}
+function movePopover_(evt){
+  const pop = $("popover");
+  if(!pop.classList.contains("show")) return;
 
-  // expandable: show some additional important fields
-  const extraKeys = ["바코드","상품코드","요청일","비고","수령인","주소","배송메세지","받는분연락처","받는분 기타연락처"];
-  for(const k of extraKeys){
-    if(k in row && String(row[k] ?? "").trim()){
-      blocks.push(kv_(k, String(row[k])));
-    }
-  }
+  const pad = 12;
+  const w = pop.getBoundingClientRect().width || 520;
 
-  body.innerHTML = `
-    ${blocks.join("")}
-    <div class="preview-actions">
-      <button class="btn" type="button" onclick="openRowModal(${idx})">전체 보기</button>
-      <button class="btn" type="button" onclick="copyRowAll(${idx})">행 전체 복사</button>
-    </div>
-  `;
+  let x = evt.clientX + 14;
+  let y = evt.clientY + 14;
+
+  // keep in viewport
+  if(x + w + pad > window.innerWidth) x = window.innerWidth - w - pad;
+  if(y + 260 + pad > window.innerHeight) y = window.innerHeight - 260 - pad;
+  if(x < pad) x = pad;
+  if(y < pad) y = pad;
+
+  pop.style.left = x + "px";
+  pop.style.top = y + "px";
+}
+function hidePopover_(){
+  const pop = $("popover");
+  pop.classList.remove("show");
 }
 
-function kv_(k, v){
-  return `
-    <div class="kv">
-      <div class="k">${escapeHtml(k)}</div>
-      <div class="v">${escapeHtml(String(v ?? ""))}</div>
-    </div>
-  `;
-}
+$("popCopy").addEventListener("click", async ()=>{
+  const t = popCurrent.text || "";
+  if(!t.trim()){ showToast("복사할 내용 없음"); return; }
+  try{
+    await navigator.clipboard.writeText(t);
+    showToast("복사됨");
+  }catch{ showToast("복사 실패"); }
+});
+$("popOpen").addEventListener("click", ()=>{
+  const key = popCurrent.key || "전체 보기";
+  const t = popCurrent.text || "";
+  openModal_(`${key}\n\n${t}`, `${key} 전체 보기`);
+});
 
-/* =========================================================
-   Modal
-========================================================= */
+/* ===================== Modal ===================== */
 let modalCopyPayload = "";
-function openModal_(text){
+function openModal_(text, title){
   modalCopyPayload = String(text ?? "");
   $("modalBody").textContent = modalCopyPayload;
+  $("modalTitle").textContent = title || "전체 보기";
   $("modalBackdrop").classList.add("show");
 }
 function closeModal_(){
@@ -1391,393 +1273,23 @@ function closeModal_(){
   modalCopyPayload = "";
   $("modalBody").textContent = "";
 }
-async function copyModal_(){
-  const t = modalCopyPayload || "";
-  if(!t.trim()){
-    showToast("복사할 내용 없음");
-    return;
-  }
-  try{
-    await navigator.clipboard.writeText(t);
-    showToast("복사됨");
-  }catch{
-    showToast("복사 실패");
-  }
-}
-window.openRowModal = function(idx){
-  if(idx == null || !lastOutRows[idx]) return;
-  const row = lastOutRows[idx];
-  // pretty text
-  const lines = [];
-  for(const c of TABLE_COLS_COPY){
-    const label = c.label;
-    const val = String(row[c.key] ?? "");
-    lines.push(`${label}: ${val}`);
-  }
-  openModal_(lines.join("\n"));
-};
-window.copyRowAll = async function(idx){
-  if(idx == null || !lastOutRows[idx]) return;
-  await copyRows_([lastOutRows[idx]]);
-};
-
-/* =========================================================
-   Render Table
-========================================================= */
-function renderTable(outRows, stockTypes){
-  const wrap = $("tableWrap");
-
-  lastOutRows = outRows || [];
-  lastStockTypes = stockTypes || [];
-  selectedRowIndexForPreview = null;
-
-  if(!outRows || outRows.length === 0){
-    wrap.innerHTML = `<div class="nodata">검색 결과가 없습니다.</div>`;
-    $("btnSelectAll").style.display = "none";
-    $("btnSelectNone").style.display = "none";
-    renderPreviewForRow_(null);
-    gateBySelection_();
-    return;
-  }
-
-  const showCheckbox = outRows.length > 1;
-  $("btnSelectAll").style.display = showCheckbox ? "" : "none";
-  $("btnSelectNone").style.display = showCheckbox ? "" : "none";
-
-  const cols = getCurrentViewCols_();
-
-  let html = `<table>
-    <thead>
-      <tr>
-        <th class="stickyA" style="min-width:48px; max-width:48px;">#</th>
-        <th class="stickyB" style="min-width:64px; max-width:32px; text-align:center;">선택</th>
-
-        ${cols.map(c=>{
-          const w = COL_WIDTH[c.label] || COL_WIDTH["_default"];
-          return `<th style="min-width:${w}px; max-width:${w}px;">${escapeHtml(c.label)}</th>`;
-        }).join("")}
-      </tr>
-    </thead>
-    <tbody>`;
-
-  outRows.forEach((o, i)=>{
-    const t = stockTypes[i] || "na";
-    const trClass = (t==="low" ? "low" : t==="out" ? "out" : t==="na" ? "na" : "");
-    html += `<tr class="${trClass}" data-row="${i}">
-      <td class="stickyA cell" data-copy="${i+1}" style="min-width:48px; max-width:48px;">${i+1}</td>
-      <td class="stickyB chkcell" style="min-width:32px; max-width:64px;">
-        ${showCheckbox ? `<input type="checkbox" class="rowChk" data-idx="${i}">` : ``}
-      </td>
-      ${cols.map(c=>{
-        const w = COL_WIDTH[c.label] || COL_WIDTH["_default"];
-        const raw = String(o[c.key] ?? "");
-        return `<td class="cell"
-          style="min-width:${w}px; max-width:${w}px;"
-          data-copy="${escapeHtml(raw)}"
-          data-full="${escapeHtml(raw)}"
-          data-row="${i}"
-          data-key="${escapeHtml(c.label)}"
-        >${escapeHtml(raw)}</td>`;
-      }).join("")}
-    </tr>`;
-  });
-
-  html += `</tbody></table>`;
-  wrap.innerHTML = html;
-
-  // events: checkbox
-  wrap.querySelectorAll("input.rowChk").forEach(chk=>{
-    chk.addEventListener("change", ()=>{
-      const tr = chk.closest("tr");
-      if(tr) tr.classList.toggle("is-selected", chk.checked);
-      // selection affects copy gate
-      gateBySelection_();
-    });
-  });
-
-  // row click → preview (but ignore when clicking checkbox itself)
-  wrap.querySelectorAll("tbody tr").forEach(tr=>{
-    tr.addEventListener("click", (e)=>{
-      const t = e.target;
-      if(t && (t.classList.contains("rowChk"))) return;
-
-      const idx = Number(tr.getAttribute("data-row"));
-      if(Number.isNaN(idx)) return;
-      renderPreviewForRow_(idx);
-
-      // subtle selection highlight for preview row (optional)
-      wrap.querySelectorAll("tbody tr").forEach(x=>x.classList.remove("is-preview"));
-      tr.classList.add("is-preview");
-    });
-  });
-
-  // cell click → copy value (not whole row)
-  wrap.querySelectorAll("td.cell").forEach(td=>{
-    td.addEventListener("click", async (e)=>{
-      // prevent row click? we still want row preview; allow both but copy is immediate
-      const text = (td.getAttribute("data-full") || td.textContent || "").trim();
-      if(!text){
-        showToast("빈 값");
-        return;
-      }
-      try{
-        await navigator.clipboard.writeText(text);
-        showToast("값 복사됨");
-      }catch{
-        showToast("복사 실패");
-      }
-    });
-
-    // double click → open modal full value
-    td.addEventListener("dblclick", (e)=>{
-      const key = td.getAttribute("data-key") || "값";
-      const text = (td.getAttribute("data-full") || td.textContent || "").trim();
-      openModal_(`${key}\n\n${text}`);
-    });
-  });
-
-  // initial gate
-  renderPreviewForRow_(null);
-  gateBySelection_();
-}
-
-/* =========================================================
-   Load Stock first
-========================================================= */
-async function loadStockOnly(){
-  setDashStatus_("재고 로딩 중…", true);
-  setDashCounts_("-");
-  setDashTarget_("-");
-  setDashGate_("na", "대기");
-  $("btnCopy").disabled = true;
-
-  try{
-    const cached = loadStockCache_();
-    if(cached){
-      await new Promise((resolve)=>{
-        parseCsvWithPapa(cached, (results)=>{
-          buildStockMapsFromParsed_(results);
-          resolve();
-        });
-      });
-      stockLoaded = true;
-      setDashStatus_("재고 로딩 완료 (캐시)");
-      setDashCounts_(`재고 ${stockMap.size.toLocaleString()} · 발주/출고는 조회 시 로드`);
-    }
-
-    const stockCsv = await fetchCsvSmart(STOCK_CSV_BASE);
-    if(!looksLikeBadCsv(stockCsv)){
-      saveStockCache_(stockCsv);
-      await new Promise((resolve)=>{
-        parseCsvWithPapa(stockCsv, (results)=>{
-          buildStockMapsFromParsed_(results);
-          resolve();
-        });
-      });
-      stockLoaded = true;
-      setDashStatus_("재고 로딩 완료");
-      setDashCounts_(`재고 ${stockMap.size.toLocaleString()} · 발주/출고는 조회 시 로드`);
-    }else{
-      if(!stockLoaded) setDashStatus_("재고 로드 실패: 시트 공개(보기 가능) 확인");
-    }
-  }catch(e){
-    console.error(e);
-    if(!stockLoaded) setDashStatus_("재고 로드 실패: 시트 공개(보기 가능) 확인");
-  }
-}
-
-/* =========================================================
-   Search
-========================================================= */
-async function search(){
-  const orderNo = normalizeOrderNo($("orderInput").value);
-
-  // reset view state
-  lastOutRows = [];
-  lastStockTypes = [];
-  originalOutRows = [];
-  lastSource = "none";
-  selectedRowIndexForPreview = null;
-
-  $("btnCopy").disabled = true;
-  $("btnCopy").classList.remove("danger");
-  $("resultSub").textContent = "-";
-  $("tableWrap").innerHTML = `<div class="nodata">검색 중…</div>`;
-  renderPreviewForRow_(null);
-
-  if(!orderNo){
-    $("tableWrap").innerHTML = `<div class="nodata">주문번호를 입력해주세요.</div>`;
-    setDashStatus_("주문번호 입력 필요");
-    gateBySelection_();
-    return;
-  }
-  if(!stockLoaded){
-    $("tableWrap").innerHTML = `<div class="nodata">재고가 아직 로딩 중입니다…</div>`;
-    setDashStatus_("재고 로딩 중…", true);
-    return;
-  }
-
-  setDashStatus_("조회 중…", true);
-
-  if(!orderLoaded || !existLoaded){
-    try{
-      await ensureOrderAndExistLoaded_();
-    }catch{
-      $("tableWrap").innerHTML = `<div class="nodata">발주/출고 시트를 불러오지 못했습니다. (시트 공개 확인)</div>`;
-      setDashStatus_("발주/출고 로드 실패");
-      gateBySelection_();
-      return;
-    }
-  }
-
-  const rows = orderIndexMap.get(orderNo) || [];
-  if(rows.length === 0){
-    setDashStatus_("검색 결과 없음");
-    $("tableWrap").innerHTML = `<div class="nodata">발주서에서 주문번호를 찾지 못했습니다.</div>`;
-    gateBySelection_();
-    return;
-  }
-
-  const outRows = rows.map(r => buildOutFromSheetRow(r));
-  const stockTypes = outRows.map(o => stockStatusByColorCode(o["상품컬러코드"]).type);
-
-  lastSource = "sheet";
-  originalOutRows = JSON.parse(JSON.stringify(outRows));
-
-  renderTable(outRows, stockTypes);
-  setDashStatus_(`검색 완료 · ${outRows.length.toLocaleString()}건`);
-}
-
-/* =========================================================
-   Bulk buttons (select all/none)
-========================================================= */
-$("btnSelectAll").addEventListener("click", ()=>{
-  const wrap = $("tableWrap");
-  wrap.querySelectorAll("input.rowChk").forEach(c => c.checked = true);
-  wrap.querySelectorAll("tbody tr").forEach(tr => tr.classList.add("is-selected"));
-  gateBySelection_();
-});
-$("btnSelectNone").addEventListener("click", ()=>{
-  const wrap = $("tableWrap");
-  wrap.querySelectorAll("input.rowChk").forEach(c => c.checked = false);
-  wrap.querySelectorAll("tbody tr").forEach(tr => tr.classList.remove("is-selected"));
-  gateBySelection_();
-});
-
-/* =========================================================
-   Copy buttons
-========================================================= */
-$("btnCopy").addEventListener("click", async ()=>{
-  if(!lastOutRows || lastOutRows.length === 0){
-    showToast("복사할 결과 없음");
-    return;
-  }
-  const gate = gateBySelection_();
-  if(gate.blocked){
-    showToast("재고 경고로 복사 차단됨");
-    return;
-  }
-  const rowsToCopy = gate.idxs.map(i => lastOutRows[i]);
-  await copyRows_(rowsToCopy);
-});
-
-$("abCopy").addEventListener("click", async ()=>{
-  const checked = getCheckedIndexes_();
-  if(!checked.length) return;
-  const idxs = checked; // action bar is only for selection mode
-  const { counts } = computeTypesByIndexes_(idxs);
-  const blocked = (counts.low + counts.out + counts.na) > 0;
-  if(blocked){
-    showToast("재고 경고로 복사 차단됨");
-    return;
-  }
-  await copyRows_(idxs.map(i => lastOutRows[i]));
-});
-
-$("abClear").addEventListener("click", ()=>{
-  const wrap = $("tableWrap");
-  wrap.querySelectorAll("input.rowChk").forEach(c => c.checked = false);
-  wrap.querySelectorAll("tbody tr").forEach(tr => tr.classList.remove("is-selected"));
-  gateBySelection_();
-});
-
-$("btnPreviewCopyAll").addEventListener("click", async ()=>{
-  if(selectedRowIndexForPreview == null) return;
-  await copyRows_([lastOutRows[selectedRowIndexForPreview]]);
-});
-
-/* =========================================================
-   Details toggle re-render
-========================================================= */
-$("toggleDetails").addEventListener("change", ()=>{
-  if(!lastOutRows || lastOutRows.length === 0) return;
-  // preserve checks
-  const checked = new Set(getCheckedIndexes_());
-  renderTable(lastOutRows, lastStockTypes);
-  // re-check
-  const wrap = $("tableWrap");
-  wrap.querySelectorAll("input.rowChk").forEach(chk=>{
-    const idx = Number(chk.dataset.idx);
-    if(checked.has(idx)){
-      chk.checked = true;
-      chk.closest("tr")?.classList.add("is-selected");
-    }
-  });
-  gateBySelection_();
-});
-
-$("toggleSelectMode").addEventListener("change", ()=>{
-  gateBySelection_();
-});
-
-/* =========================================================
-   Clear
-========================================================= */
-$("btnClear").addEventListener("click", ()=>{
-  $("orderInput").value = "";
-  $("tableWrap").innerHTML = `<div class="nodata">검색 결과가 없습니다.</div>`;
-  renderPreviewForRow_(null);
-
-  lastOutRows = [];
-  lastStockTypes = [];
-  originalOutRows = [];
-  lastSource = "none";
-  selectedRowIndexForPreview = null;
-
-  $("btnCopy").disabled = true;
-  $("btnCopy").classList.remove("danger");
-
-  $("actionBar").classList.remove("show");
-  setDashStatus_("초기화됨");
-  setDashTarget_("-");
-  setDashGate_("na", "대기");
-  $("resultSub").textContent = "-";
-});
-
-/* =========================================================
-   Search triggers
-========================================================= */
-$("orderInput").addEventListener("keydown", (e)=>{
-  if(e.key === "Enter") search();
-});
-$("btnSearch").addEventListener("click", search);
-
-/* =========================================================
-   Modal events
-========================================================= */
 $("btnModalClose").addEventListener("click", closeModal_);
-$("btnModalCopy").addEventListener("click", copyModal_);
 $("modalBackdrop").addEventListener("click", (e)=>{
   if(e.target === $("modalBackdrop")) closeModal_();
+});
+$("btnModalCopy").addEventListener("click", async ()=>{
+  if(!modalCopyPayload.trim()){ showToast("복사할 내용 없음"); return; }
+  try{
+    await navigator.clipboard.writeText(modalCopyPayload);
+    showToast("복사됨");
+  }catch{ showToast("복사 실패"); }
 });
 document.addEventListener("keydown", (e)=>{
   if(e.key === "Escape") closeModal_();
 });
 
-/* =========================================================
-   Init
-========================================================= */
-loadStockOnly();
+/* ===================== 시작 ===================== */
+loadStockOnly().then(()=>computeGate_());
 </script>
 </body>
 </html>
