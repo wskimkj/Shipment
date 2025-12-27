@@ -292,46 +292,38 @@
       to{ transform: rotate(360deg); }
     }
 
-    /* ===================== 셀 호버 미리보기(툴팁) ===================== */
-    td.copy{
-      position: relative;
-      user-select: none;
-    }
-
-    td.copy::after{
-      content: attr(data-preview);
-      position: absolute;
-      left: 10px;
-      top: calc(100% + 6px);
-      z-index: 9999;
-
-      max-width: min(520px, 90vw);
-      white-space: normal;
-      word-break: break-word;
+    /* ===================== ✅ 셀 호버 미리보기(오버레이) ===================== */
+    /* table-wrap가 overflow:auto라 내부 툴팁은 잘리기 쉬움 → fixed 오버레이로 구현 */
+    #hoverTip{
+      position: fixed;
+      z-index: 10000;
+      max-width: min(560px, 92vw);
+      max-height: min(280px, 40vh);
+      overflow: auto;
 
       padding: 10px 12px;
       border-radius: 12px;
       border: 1px solid rgba(170,150,230,.35);
-      background: rgba(255,255,255,.96);
-      box-shadow: 0 18px 50px rgba(30,18,60,.12);
+      background: rgba(255,255,255,.97);
+      box-shadow: 0 18px 50px rgba(30,18,60,.16);
 
       font-size: 12px;
       font-weight: 700;
       color: rgba(47,42,58,.95);
+      line-height: 1.35;
 
       opacity: 0;
       transform: translateY(-4px);
       pointer-events: none;
-      transition: .12s ease;
+      transition: .10s ease;
+      display: none;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
-
-    td.copy:hover::after{
+    #hoverTip.show{
+      display: block;
       opacity: 1;
       transform: translateY(0);
-    }
-
-    td.copy[data-preview=""]::after{
-      display:none;
     }
   </style>
 </head>
@@ -455,6 +447,7 @@
   </div>
 
   <div id="toast"> copy </div>
+  <div id="hoverTip"></div>
 
 <script>
 /* ===================== 기준 ===================== */
@@ -816,6 +809,8 @@ function setPanel(which, on){
   const el = which === "manual" ? $("manualPanel") : $("changePanel");
   el.classList.toggle("show", !!on);
 }
+
+/* ✅ A안 반영: gateCopyByTypes는 "복사 대상(선택/전체)"에 대해 호출됨 */
 function gateCopyByTypes(types){
   let ok=0, low=0, out=0, na=0;
   for(const t of types){
@@ -849,6 +844,31 @@ function gateCopyByTypes(types){
   }else{
     $("copyGateMsg").textContent = "복사 가능";
     $("copyGateMsg").className = "warnline";
+  }
+}
+
+/* ===================== ✅ 복사 대상(체크 우선, 없으면 전체) + 선택 기준 게이트 ===================== */
+function getCopyTargetIndexes_(){
+  if(!lastOutRows || lastOutRows.length === 0) return [];
+  const checked = getCheckedIndexes_();
+  return (checked && checked.length) ? checked : lastOutRows.map((_, i)=>i);
+}
+
+function updateCopyGateBySelection_(){
+  if(!lastOutRows || lastOutRows.length === 0){
+    clearStockUI();
+    $("btnCopy").disabled = true;
+    return;
+  }
+  const idxs = getCopyTargetIndexes_();
+  const types = idxs.map(i => stockStatusByColorCode(lastOutRows[i]["상품컬러코드"]).type);
+
+  gateCopyByTypes(types);
+
+  // 선택 복사 안내 (체크가 존재하면 prefix)
+  const checkedCount = getCheckedIndexes_().length;
+  if(checkedCount > 0){
+    $("copyGateMsg").textContent = `선택 ${checkedCount}건 기준: ` + $("copyGateMsg").textContent;
   }
 }
 
@@ -1219,6 +1239,7 @@ $("btnSelectAll")?.addEventListener("click", ()=>{
   wrap.querySelectorAll("tbody tr").forEach(tr => tr.classList.add("is-selected"));
   refreshColorDropdownByCurrentRows_();
   updateToolbar_();
+  updateCopyGateBySelection_(); // ✅ 추가
 });
 $("btnSelectNone")?.addEventListener("click", ()=>{
   const wrap = $("tableWrap");
@@ -1226,9 +1247,63 @@ $("btnSelectNone")?.addEventListener("click", ()=>{
   wrap.querySelectorAll("tbody tr").forEach(tr => tr.classList.remove("is-selected"));
   refreshColorDropdownByCurrentRows_();
   updateToolbar_();
+  updateCopyGateBySelection_(); // ✅ 추가
 });
 
-/* ===================== 렌더 (툴팁 포함) ===================== */
+/* ===================== ✅ 셀 호버 미리보기(오버레이) ===================== */
+let hoverTipEl = null;
+let hoverTipActive = false;
+
+function initHoverTip_(){
+  hoverTipEl = $("hoverTip");
+}
+
+function showHoverTip_(text, clientX, clientY){
+  if(!hoverTipEl) return;
+  const t = String(text ?? "").trim();
+  if(!t) return;
+
+  hoverTipEl.textContent = t;
+  hoverTipEl.classList.add("show");
+  hoverTipActive = true;
+  moveHoverTip_(clientX, clientY);
+}
+
+function moveHoverTip_(clientX, clientY){
+  if(!hoverTipEl || !hoverTipActive) return;
+
+  const pad = 14;
+  const offset = 14;
+
+  hoverTipEl.style.left = "0px";
+  hoverTipEl.style.top = "0px";
+
+  // 먼저 보이게 해서 크기 측정
+  const rect = hoverTipEl.getBoundingClientRect();
+  let x = clientX + offset;
+  let y = clientY + offset;
+
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  if(x + rect.width + pad > vw){
+    x = Math.max(pad, vw - rect.width - pad);
+  }
+  if(y + rect.height + pad > vh){
+    y = Math.max(pad, clientY - rect.height - offset);
+  }
+
+  hoverTipEl.style.left = `${x}px`;
+  hoverTipEl.style.top = `${y}px`;
+}
+
+function hideHoverTip_(){
+  if(!hoverTipEl) return;
+  hoverTipEl.classList.remove("show");
+  hoverTipActive = false;
+}
+
+/* ===================== 렌더 ===================== */
 function renderTable(outRows, stockTypes){
   const wrap = $("tableWrap");
 
@@ -1241,10 +1316,9 @@ function renderTable(outRows, stockTypes){
     wrap.innerHTML = `<div class="no-data">검색 결과가 없습니다.</div>`;
     $("btnCopy").disabled = true;
     updateToolbar_();
+    hideHoverTip_();
     return;
   }
-
-  gateCopyByTypes(stockTypes);
 
   const showCheckbox = outRows.length > 1;
 
@@ -1266,22 +1340,19 @@ function renderTable(outRows, stockTypes){
     const trClass = t === "low" ? "low" : t === "out" ? "out" : t === "na" ? "na" : "";
 
     html += `<tr class="${trClass}">
-      <td class="copy" data-copy="${i+1}" data-preview="${i+1}">${i+1}</td>
+      <td class="copy" data-copy="${i+1}">${i+1}</td>
       <td class="chkcell">
         ${showCheckbox ? `<input type="checkbox" class="rowChk" data-idx="${i}">` : ``}
       </td>
       ${TABLE_COLS_VIEW.map(c=>{
         const v = o[c.key] ?? "";
         const w = COL_WIDTH[c.label] || COL_WIDTH["_default"];
-
-        const pv = String(v ?? "").trim();
-        const pvShort = pv.length > 500 ? (pv.slice(0, 500) + " …") : pv;
+        const raw = String(v ?? "");
 
         return `<td class="copy"
           style="min-width:${w}px; max-width:${w}px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
-          data-copy="${escapeHtml(pv)}"
-          data-preview="${escapeHtml(pvShort)}">
-          ${escapeHtml(String(v))}
+          data-copy="${escapeHtml(raw)}">
+          ${escapeHtml(raw)}
         </td>`;
       }).join("")}
     </tr>`;
@@ -1292,6 +1363,7 @@ function renderTable(outRows, stockTypes){
 
   refreshColorDropdownByCurrentRows_();
 
+  // 체크 이벤트: 선택 하이라이트 + 선택 기준 게이트 업데이트
   wrap.querySelectorAll("input.rowChk").forEach(chk=>{
     chk.addEventListener("change", ()=>{
       const tr = chk.closest("tr");
@@ -1300,11 +1372,14 @@ function renderTable(outRows, stockTypes){
       }
       refreshColorDropdownByCurrentRows_();
       updateToolbar_();
+      updateCopyGateBySelection_(); // ✅ A안
     });
   });
 
   updateToolbar_();
+  updateCopyGateBySelection_(); // ✅ 최초 상태: 체크 없으면 전체 기준
 
+  // 셀 클릭: 복사
   wrap.querySelectorAll(".copy").forEach(td=>{
     td.addEventListener("click", async ()=>{
       const text = (td.getAttribute("data-copy") || td.textContent || "").trim();
@@ -1314,6 +1389,20 @@ function renderTable(outRows, stockTypes){
       }catch{
         showToast("복사 실패");
       }
+    });
+
+    // ✅ 마우스 올리면 오버레이 미리보기(ellipsis 잘림 해결)
+    td.addEventListener("mouseenter", (e)=>{
+      const text = (td.getAttribute("data-copy") || td.textContent || "").trim();
+      // 너무 긴 경우도 보여주되, 브라우저 부담 줄이려고 상한
+      const t = text.length > 4000 ? (text.slice(0, 4000) + " …") : text;
+      showHoverTip_(t, e.clientX, e.clientY);
+    });
+    td.addEventListener("mousemove", (e)=>{
+      moveHoverTip_(e.clientX, e.clientY);
+    });
+    td.addEventListener("mouseleave", ()=>{
+      hideHoverTip_();
     });
   });
 }
@@ -1336,7 +1425,6 @@ function buildTSV(outRows){
 
 function buildHTMLTable(outRows){
   const tdStyle = "border:1px solid #eee;padding:6px 8px;text-align:center;vertical-align:middle;";
-
   const tbody = outRows.map(o => {
     const tds = TABLE_COLS_COPY.map(c =>
       `<td style="${tdStyle}">${escapeHtml(String(o[c.key] ?? ""))}</td>`
@@ -1387,6 +1475,7 @@ async function search(){
   if(!orderNo){
     $("tableWrap").innerHTML = `<div class="no-data">주문번호를 입력해주세요.</div>`;
     updateToolbar_();
+    hideHoverTip_();
     return;
   }
 
@@ -1405,6 +1494,7 @@ async function search(){
       $("tableWrap").innerHTML =
         `<div class="no-data">발주서/출고 시트를 불러오지 못했습니다.<br/>아래에서 <strong>상품컬러코드</strong>를 입력하면 재고 확인 후 결과 테이블을 만들 수 있어요.</div>`;
       updateToolbar_();
+      hideHoverTip_();
       return;
     }
   }
@@ -1421,6 +1511,7 @@ async function search(){
     $("tableWrap").innerHTML =
       `<div class="no-data">발주서에서 주문번호를 찾지 못했습니다.<br/>아래에서 <strong>상품컬러코드</strong>를 입력하면 재고 확인 후 결과 테이블을 만들 수 있어요.</div>`;
     updateToolbar_();
+    hideHoverTip_();
     return;
   }
 
@@ -1531,19 +1622,25 @@ $("btnExistToggle").addEventListener("click", ()=>{
   $("btnExistToggle").textContent = isOpen ? "펼치기" : "접기";
 });
 
-/* ===================== 복사 ===================== */
+/* ===================== ✅ 복사: 체크 있으면 체크만 / 없으면 전체 ===================== */
 $("btnCopy").addEventListener("click", async ()=>{
   if(!lastOutRows || lastOutRows.length === 0){
     showToast("복사할 결과 없음");
     return;
   }
+
+  // 최신 게이트 상태 반영(혹시라도)
+  updateCopyGateBySelection_();
   if($("btnCopy").disabled){
     showToast("재고 경고로 복사 차단됨");
     return;
   }
 
-  const tsv = buildTSV(lastOutRows);
-  const html = buildHTMLTable(lastOutRows);
+  const idxs = getCopyTargetIndexes_();
+  const rowsToCopy = idxs.map(i => lastOutRows[i]);
+
+  const tsv = buildTSV(rowsToCopy);
+  const html = buildHTMLTable(rowsToCopy);
 
   try{
     await navigator.clipboard.write([
@@ -1552,7 +1649,7 @@ $("btnCopy").addEventListener("click", async ()=>{
         "text/html": new Blob([html], { type: "text/html" }),
       })
     ]);
-    showToast(`통째로 복사됨 (${lastOutRows.length}건)`);
+    showToast(`통째로 복사됨 (${rowsToCopy.length}건)`);
   }catch(e){
     try{
       await navigator.clipboard.writeText(tsv);
@@ -1587,6 +1684,7 @@ $("btnClear").addEventListener("click", ()=>{
   originalOutRows = [];
   lastSource = "none";
   updateToolbar_();
+  hideHoverTip_();
 });
 
 /* ===================== 검색/버튼 이벤트 ===================== */
@@ -1599,6 +1697,7 @@ $("btnChangeApply").addEventListener("click", applyChange);
 $("btnChangeReset").addEventListener("click", resetChange);
 
 /* ===================== 시작 ===================== */
+initHoverTip_();
 loadStockOnly(); // ✅ 초기 로딩은 재고만
 </script>
 </body>
