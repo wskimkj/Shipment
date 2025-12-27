@@ -280,7 +280,6 @@
             <span class="field-label">주문번호</span>
             <input id="orderInput" type="text" placeholder="쇼핑몰 주문번호 입력 (Enter)" />
           </div>
-          <button class="btn" id="btnClear">초기화</button>
         </div>
 
         <!-- 발주서에 주문번호 없을 때: 수동 입력 -->
@@ -353,6 +352,19 @@
     document.getElementById("orderLink").href = ORDER_SHEET_URL_VIEW;
     document.getElementById("stockLink").href = STOCK_SHEET_URL_VIEW;
     document.getElementById("existLink").href = EXIST_SHEET_URL_VIEW;
+
+
+    /* ===================== ✅ ESC: 전체 초기화 ===================== */
+document.addEventListener("keydown", (e)=>{
+  if(e.key !== "Escape") return;
+
+  // 입력 중이어도 ESC는 초기화되게 할 거면 이 줄은 빼도 됨.
+  // (원하면 "입력 중엔 초기화 안 함"으로 바꿀 수도 있음)
+  e.preventDefault();
+
+  resetAll_();
+});
+
 
     /* ===================== 강제 포함 B/C/D ===================== */
     // CSV 0-based: A=0, B=1, C=2, D=3
@@ -1513,33 +1525,35 @@
         await shortcutCopy_();
       }
     });
+    /* ===================== 초기화 (버튼 없이 함수로) ===================== */
+function resetAll_(){
+  $("orderInput").value = "";
+  $("manualColor").value = "";
+  $("manualQty").value = "";
+  $("changeColor").value = "";
+  $("changeQty").value = "";
 
-    /* ===================== 초기화 ===================== */
-    $("btnClear").addEventListener("click", ()=>{
-      $("orderInput").value = "";
-      $("manualColor").value = "";
-      $("manualQty").value = "";
-      $("changeColor").value = "";
-      $("changeQty").value = "";
-      const sel = $("changeColorSelect");
-      if(sel) sel.value = "";
+  const sel = $("changeColorSelect");
+  if(sel) sel.value = "";
 
-      $("status").textContent = "초기화됨";
-      $("tableWrap").innerHTML = `<div class="no-data">검색 결과가 없습니다.</div>`;
-      clearStockUI();
-      hideExistPanel();
-      setPanel("manual", false);
-      setPanel("change", false);
+  $("status").textContent = "초기화됨";
+  $("tableWrap").innerHTML = `<div class="no-data">검색 결과가 없습니다.</div>`;
+  clearStockUI();
+  hideExistPanel();
+  setPanel("manual", false);
+  setPanel("change", false);
 
-      lastOutRows = [];
-      lastStockTypes = [];
-      originalOutRows = [];
-      lastSource = "none";
-      copyBlocked_ = true;
+  lastOutRows = [];
+  lastStockTypes = [];
+  originalOutRows = [];
+  lastSource = "none";
+  copyBlocked_ = true;
 
-      updateToolbar_();
-      hideHoverTip_();
-    });
+  updateToolbar_();
+  hideHoverTip_();
+}
+
+
 
     /* ===================== 검색/버튼 이벤트 ===================== */
     $("orderInput").addEventListener("keydown", (e)=>{
