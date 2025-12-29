@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title> Shipment </title>
+  <title>Shipment</title>
 
   <link rel="stylesheet" as="style" crossorigin
     href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
@@ -194,23 +194,51 @@
       display:inline-block; animation: spin .8s linear infinite; vertical-align:-2px;
     }
 
-
-    #dupList{ display:flex; flex-direction:column; gap:6px; width:100%; }
-.dupItem{
-  padding:10px 12px; border-radius:14px;
-  border:1px solid rgba(255, 35, 35, .35);
-  background: rgba(255, 35, 35, .10);
-  font-size:12px; font-weight:900;
-  color: rgba(135, 0, 0, .98);
-  line-height:1.35;
-}
-.dupMeta{
-  margin-top:4px;
-  font-size:11px; font-weight:800;
-  color: rgba(135, 0, 0, .78);
-}
-
     @keyframes spin{ to{ transform: rotate(360deg); } }
+
+    /* ===================== 🔴 DUP 경고 행 (테이블 상단 삽입) ===================== */
+    tr.dupWarnRow td{
+      padding: 12px 12px !important;
+      border-bottom: 1px solid rgba(255,35,35,.22) !important;
+      background: linear-gradient(90deg, rgba(255,35,35,.14), rgba(255,143,188,.10)) !important;
+    }
+    .dupWarnBox{ display:flex; flex-direction:column; gap:6px; }
+    .dupWarnTop{
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+      font-weight: 900; color: rgba(135,0,0,.98);
+    }
+    .dupWarnPill{
+      display:inline-flex; align-items:center; gap:6px;
+      padding:4px 10px; border-radius:999px;
+      background: rgba(255,35,35,.14);
+      border:1px solid rgba(255,35,35,.35);
+      font-size:11px; font-weight:900;
+    }
+    .dupWarnHint{
+      font-size:11px; color: rgba(135,0,0,.78); font-weight: 800;
+    }
+    .dupWarnList{
+      display:flex; flex-direction:column; gap:6px; margin-top: 2px;
+    }
+    .dupWarnItem{
+      padding:8px 10px;
+      border-radius:12px;
+      border:1px solid rgba(255,35,35,.25);
+      background: rgba(255,255,255,.70);
+      font-size:12px;
+      color: rgba(47,42,58,.92);
+      font-weight: 800;
+      line-height: 1.35;
+    }
+    .dupWarnItem .meta{
+      margin-top:4px;
+      font-size:11px;
+      color: rgba(110,106,130,.85);
+      font-weight: 700;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
 
     /* ===================== ✅ 셀 호버 미리보기(오버레이) ===================== */
     #hoverTip{
@@ -230,7 +258,7 @@
     }
     #hoverTip.show{ display: block; opacity: 1; transform: translateY(0); }
 
-    /* ✅ 상단 요약(재고/발주/주문번호/출고, OK n건, 복사가능) 숨김 */
+    /* ✅ 상단 요약 숨김 */
     #stat2, #stockSummary, #copyGateMsg { display:none !important; }
   </style>
 </head>
@@ -240,11 +268,11 @@
     <div class="card">
       <div class="card-inner">
         <div class="title">
-          <div> Shipment </div>
+          <div>Shipment</div>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <a class="pill" id="orderLink" href="#" target="_blank" rel="noopener noreferrer">발주서</a>
             <a class="pill" id="stockLink" href="#" target="_blank" rel="noopener noreferrer">재고</a>
-            <a class="pill" id="existLink" href="#" target="_blank" rel="noopener noreferrer"> 출고 </a>
+            <a class="pill" id="existLink" href="#" target="_blank" rel="noopener noreferrer">출고</a>
           </div>
         </div>
 
@@ -254,14 +282,6 @@
           <span id="stockSummary"></span>
           <span id="copyGateMsg"></span>
         </div>
-
-        <!-- ✅ 이중 출고 방지: D/E에 주문번호가 "포함"된 행 경고 -->
-<div class="panel" id="dupPanel" style="display:none;">
-  <span class="label">⚠️ 이중 출고 의심</span>
-  <span class="minihelp" id="dupHelp"></span>
-  <div id="dupList" style="width:100%;"></div>
-</div>
-
 
         <!-- 기존 등록 데이터 토글 패널 -->
         <div class="panel" id="existPanel" style="display:none;">
@@ -299,7 +319,7 @@
           </div>
         </div>
 
-        <!-- ✅ 조회 버튼 제거: Enter로만 조회 -->
+        <!-- Enter로만 조회 -->
         <div class="row">
           <div class="input">
             <span class="field-label">주문번호</span>
@@ -354,7 +374,7 @@
     </div>
   </div>
 
-  <div id="toast"> copy </div>
+  <div id="toast">copy</div>
   <div id="hoverTip"></div>
 
   <script>
@@ -370,7 +390,7 @@
     const STOCK_SHEET_URL_VIEW = "https://docs.google.com/spreadsheets/d/1_L12NKkBVU4c5xDPrYLUQRnSUG2NoAwYGWIfPDVO3bM/edit?gid=366983013#gid=366983013";
     const STOCK_CSV_BASE = "https://docs.google.com/spreadsheets/d/1_L12NKkBVU4c5xDPrYLUQRnSUG2NoAwYGWIfPDVO3bM/export?format=csv&gid=366983013";
 
-    // 목적/전산 처리 방법(출고) 시트
+    // 출고(목적/전산 처리 방법) 시트
     const EXIST_SHEET_URL_VIEW = "https://docs.google.com/spreadsheets/d/1LPy69E2yPTaSwxFAYrX6qV0BZx1tW0YdonLRNqeo5Vc/edit?gid=0#gid=0";
     const EXIST_CSV_BASE = "https://docs.google.com/spreadsheets/d/1LPy69E2yPTaSwxFAYrX6qV0BZx1tW0YdonLRNqeo5Vc/export?format=csv&gid=0";
 
@@ -378,18 +398,12 @@
     document.getElementById("stockLink").href = STOCK_SHEET_URL_VIEW;
     document.getElementById("existLink").href = EXIST_SHEET_URL_VIEW;
 
-
     /* ===================== ✅ ESC: 전체 초기화 ===================== */
-document.addEventListener("keydown", (e)=>{
-  if(e.key !== "Escape") return;
-
-  // 입력 중이어도 ESC는 초기화되게 할 거면 이 줄은 빼도 됨.
-  // (원하면 "입력 중엔 초기화 안 함"으로 바꿀 수도 있음)
-  e.preventDefault();
-
-  resetAll_();
-});
-
+    document.addEventListener("keydown", (e)=>{
+      if(e.key !== "Escape") return;
+      e.preventDefault();
+      resetAll_();
+    });
 
     /* ===================== 강제 포함 B/C/D ===================== */
     // CSV 0-based: A=0, B=1, C=2, D=3
@@ -425,7 +439,7 @@ document.addEventListener("keydown", (e)=>{
     const TABLE_COLS_VIEW = TABLE_COLS_COPY.filter(c => !HIDE_IN_VIEW.has(c.label));
 
     const COL_WIDTH = {
-    "요청일":80, "사방넷주문번호": 100, "쇼핑몰 주문번호(필수)": 130,"쇼핑몰":80,
+      "요청일":80, "사방넷주문번호": 100, "쇼핑몰 주문번호(필수)": 130,"쇼핑몰":80,
       "상품명": 200, "바코드": 120, "상품코드": 100, "상품컬러코드": 120, "결제금액": 80,
       "옵션(수집)": 120, "_default": 60
     };
@@ -482,18 +496,18 @@ document.addEventListener("keydown", (e)=>{
     function normalizeOrderNo(v){ return normalizeKey(v); }
 
     function normLoose_(v){
-  return String(v ?? "")
-    .replace(/[\s\-]/g, "")
-    .trim()
-    .toLowerCase();
-}
+      return String(v ?? "")
+        .replace(/[\s\-]/g, "")
+        .trim()
+        .toLowerCase();
+    }
 
-function normDigits_(v){
-  return String(v ?? "")
-    .replace(/[^0-9]/g, "");
-}
+    function normDigits_(v){
+      return String(v ?? "")
+        .replace(/[^0-9]/g, "");
+    }
 
-        // ✅ 과학적 표기(E+15 등) → 원래 숫자 문자열로 복원
+    // ✅ 과학적 표기(E+15 등) → 원래 숫자 문자열로 "복원"
     function sciToIntString_(s){
       s = String(s ?? "").trim();
       if(!/[eE]/.test(s)) return s;
@@ -522,12 +536,10 @@ function normDigits_(v){
       }
     }
 
-    // ✅ 포함 검색용 정규화 (CSV 깨짐 대응)
+    // ✅ 포함 검색용 정규화 (CSV 깨짐 대응 + 과학적 표기 복원)
     function normalizeForContains_(s){
       return normalizeKey(sciToIntString_(s));
     }
-
-
 
     function normColorCode(v){
       return normalizeKey(v).replace(/\s+/g,"").replace(/-/g,"").toUpperCase();
@@ -801,68 +813,7 @@ function normDigits_(v){
       }
     }
 
-    function hideDupPanel_(){
-  const p = $("dupPanel");
-  if(!p) return;
-  p.style.display = "none";
-  $("dupHelp").textContent = "";
-  $("dupList").innerHTML = "";
-}
-
-/**
- * ✅ 출고 시트(EXIST)에서 D/E 열에 needle(검색어)이 "포함"된 행을 모두 찾고
- *    그 행의 C열 텍스트를 경고로 노출
- */
-function showDupMatchesByContains_(needle){
-  hideDupPanel_();
-
-  const q = normalizeKey(needle);
-  if(!q) return;
-  if(!existLoaded || !existRows || existRows.length === 0) return;
-
-  // 시트 헤더가 바뀌어도 견고하게: 가능한 한 헤더로 C/D/E를 잡고, 실패하면 고정 인덱스 사용
-  const cIdx =
-    existHeaderMap.get("쇼핑몰 주문번호(필수)") ??
-    existHeaderMap.get("쇼핑몰 주문번호") ??
-    2; // C열 기본
-
-  // "D열 혹은 E열"은 지금 코드에서 목적/전산 처리방법을 3,4로 쓰고 있으니 동일하게
-  const dIdx = 3; // D열
-  const eIdx = 4; // E열
-
-  const matches = [];
-  for(const r of existRows){
-    const d = String(safeGet(r, dIdx) ?? "");
-    const e = String(safeGet(r, eIdx) ?? "");
-    // 포함(contains) 판정: 대소문자/공백 영향 줄이려면 normalizeKey를 함께 써도 됨
-const dNorm = normalizeForContains_(d);
-const eNorm = normalizeForContains_(e);
-
-if(dNorm.includes(q) || eNorm.includes(q)){
-      const cText = String(safeGet(r, cIdx) ?? "").trim();
-      const dText = d.trim();
-      const eText = e.trim();
-      matches.push({ cText, dText, eText });
-    }
-  }
-
-  if(matches.length === 0) return;
-
-  const panel = $("dupPanel");
-  panel.style.display = "flex";
-
-  $("dupHelp").textContent = `검색어 "${q}" 가 출고 시트 D/E에 포함된 기록: ${matches.length}건`;
-
-  $("dupList").innerHTML = matches.map((m, i)=>`
-    <div class="dupItem">
-      ${escapeHtml(m.cText || "(C열 값 없음)")}
-      <div class="dupMeta">D: ${escapeHtml(m.dText || "-")} · E: ${escapeHtml(m.eText || "-")}</div>
-    </div>
-  `).join("");
-}
-
-
-    /* ===================== 기존 데이터(목적/처리) 토글 ===================== */
+    /* ===================== 기존 데이터(목적/처리) ===================== */
     let existRows = [];
     let existHeaderMap = new Map();
     let existIndexBySabang = new Map();
@@ -932,16 +883,51 @@ if(dNorm.includes(q) || eNorm.includes(q)){
       }).join("");
     }
 
+    /* ===================== ✅ 이중출고(테이블 경고행) 매칭 결과 ===================== */
+    let dupMatchesForTable_ = [];
+
+    function computeDupMatchesForTable_(needle){
+      dupMatchesForTable_ = [];
+
+      const q = normalizeForContains_(needle);
+      if(!q) return;
+      if(!existLoaded || !existRows || existRows.length === 0) return;
+
+      // 기본 인덱스(0-based): A=0, C=2, D=3, E=4, N=13
+      const aIdx = 0;
+      const cIdx =
+        existHeaderMap.get("쇼핑몰 주문번호(필수)") ??
+        existHeaderMap.get("쇼핑몰 주문번호") ??
+        2;
+      const dIdx = 3;
+      const eIdx = 4;
+      const nIdx = 13; // N열(플레이엠디 상품컬러명)
+
+      for(const r of existRows){
+        const dRaw = String(safeGet(r, dIdx) ?? "");
+        const eRaw = String(safeGet(r, eIdx) ?? "");
+        const dNorm = normalizeForContains_(dRaw);
+        const eNorm = normalizeForContains_(eRaw);
+
+        if(dNorm.includes(q) || eNorm.includes(q)){
+          dupMatchesForTable_.push({
+            reqDate: String(safeGet(r, aIdx) ?? "").trim(), // A
+            mallNo:  String(safeGet(r, cIdx) ?? "").trim(), // C
+            dText:   dRaw.trim(),                           // D
+            eText:   eRaw.trim(),                           // E
+            colorNm: String(safeGet(r, nIdx) ?? "").trim(), // N
+          });
+        }
+      }
+    }
+
     /* ===================== 데이터 저장 (발주서) ===================== */
     let orderRows = [];
     let orderIndexMap = new Map();
-    // ✅ 추가 인덱스
-let orderIndexByMall = new Map();
-let orderIndexBySabang = new Map();
-let orderIndexByTracking = new Map();
-let orderIndexByPhone = new Map();
-// 수령인(부분검색이 많아서 인덱스 대신 필터로 처리 추천)
-
+    let orderIndexByMall = new Map();
+    let orderIndexBySabang = new Map();
+    let orderIndexByTracking = new Map();
+    let orderIndexByPhone = new Map();
 
     /* ===================== 상태 ===================== */
     let lastOutRows = [];
@@ -1003,7 +989,7 @@ let orderIndexByPhone = new Map();
       }
     }
 
-    /* ===================== 발주/출고 파싱 (함수화) ===================== */
+    /* ===================== 발주/출고 파싱 ===================== */
     function parseOrderCsv_(csvText){
       return new Promise((resolve)=>{
         parseCsvWithPapa(csvText, (results)=>{
@@ -1015,54 +1001,47 @@ let orderIndexByPhone = new Map();
           orderRows = rows.slice(1).filter(r => r && r.length > 1);
           const matchIdx = getMatchIndexFromHeader_();
 
-orderIndexMap = new Map();      // (기존) 호환
-orderIndexByMall = new Map();   // ✅ 추가
-orderIndexBySabang = new Map();
-orderIndexByTracking = new Map();
-orderIndexByPhone = new Map();
+          orderIndexMap = new Map();
+          orderIndexByMall = new Map();
+          orderIndexBySabang = new Map();
+          orderIndexByTracking = new Map();
+          orderIndexByPhone = new Map();
 
-const idxMall = matchIdx; // 쇼핑몰 주문번호
-const idxSabang = 1;      // B열(사방넷주문번호) - 네 코드에서 고정 사용 중
+          const idxMall = matchIdx;
+          const idxSabang = 1;
 
-const idxTracking  = headerIndexMap.get("운송장 번호");
-const idxPhone     = headerIndexMap.get("받는분연락처");
+          const idxTracking  = headerIndexMap.get("운송장 번호");
+          const idxPhone     = headerIndexMap.get("받는분연락처");
 
-function pushIndex(map, key, row){
-  if(!key) return;
-  if(!map.has(key)) map.set(key, []);
-  map.get(key).push(row);
-}
+          function pushIndex(map, key, row){
+            if(!key) return;
+            if(!map.has(key)) map.set(key, []);
+            map.get(key).push(row);
+          }
 
-for(const r of orderRows){
-  const mall = normalizeOrderNo(r[idxMall]);
-  const sabang = normalizeKey(r[idxSabang]);
+          for(const r of orderRows){
+            const mall = normalizeOrderNo(r[idxMall]);
+            const sabang = normalizeKey(r[idxSabang]);
 
-  // 1) 쇼핑몰 주문번호
-  if(mall){
-    pushIndex(orderIndexMap, mall, r);      // 기존 코드 호환
-    pushIndex(orderIndexByMall, mall, r);   // 새 인덱스
-  }
+            if(mall){
+              pushIndex(orderIndexMap, mall, r);
+              pushIndex(orderIndexByMall, mall, r);
+            }
+            if(sabang) pushIndex(orderIndexBySabang, sabang, r);
 
-  // 2) 사방넷주문번호
-  if(sabang) pushIndex(orderIndexBySabang, sabang, r);
+            if(idxTracking != null){
+              const trk = normLoose_(safeGet(r, idxTracking));
+              if(trk) pushIndex(orderIndexByTracking, trk, r);
+            }
 
-  // 3) 운송장 번호
-  if(idxTracking != null){
-    const trk = normLoose_(safeGet(r, idxTracking));
-    if(trk) pushIndex(orderIndexByTracking, trk, r);
-  }
+            if(idxPhone != null){
+              const ph = normDigits_(safeGet(r, idxPhone));
+              if(ph) pushIndex(orderIndexByPhone, ph, r);
+            }
+          }
 
-  // 4) 받는분연락처
-  if(idxPhone != null){
-    const ph = normDigits_(safeGet(r, idxPhone));
-    if(ph) pushIndex(orderIndexByPhone, ph, r);
-  }
-}
-
-
-orderLoaded = true;
-resolve();
-         
+          orderLoaded = true;
+          resolve();
         });
       });
     }
@@ -1141,7 +1120,7 @@ resolve();
       }
     }
 
-    /* ===================== ✅ 발주/출고: 캐시 우선 + 백그라운드 갱신 ===================== */
+    /* ===================== 발주/출고: 캐시 우선 + 백그라운드 갱신 ===================== */
     async function refreshOrderExistInBackground_(){
       if(orderExistRefreshingPromise) return orderExistRefreshingPromise;
 
@@ -1161,7 +1140,6 @@ resolve();
             await parseExistCsv_(existCsv);
           }
         }catch(e){
-          // 백그라운드 갱신 실패는 조용히
           console.warn("background refresh failed", e);
         }finally{
           orderExistRefreshingPromise = null;
@@ -1186,7 +1164,6 @@ resolve();
           if(cachedOrder && !orderLoaded) await parseOrderCsv_(cachedOrder);
           if(cachedExist && !existLoaded) await parseExistCsv_(cachedExist);
 
-          // 캐시로 둘 다 준비되면: 즉시 끝내고, 최신은 백그라운드 갱신
           if(orderLoaded && existLoaded){
             setLoadingUI_(false, "로딩 완료 (캐시)");
             orderExistLoadingPromise = null;
@@ -1194,7 +1171,7 @@ resolve();
             return;
           }
 
-          // 1) 캐시가 없거나 한쪽만 있으면 네트워크로 가져오기(한 번만)
+          // 1) 네트워크
           const [orderCsv, existCsv] = await Promise.all([
             fetchCsvSmart(ORDER_CSV_BASE),
             fetchCsvSmart(EXIST_CSV_BASE),
@@ -1358,6 +1335,44 @@ resolve();
           <tbody>
       `;
 
+      // ✅ 🔴 DUP 경고 행: 테이블 맨 위에 삽입
+      if(dupMatchesForTable_ && dupMatchesForTable_.length){
+        const colSpan = 2 + TABLE_COLS_VIEW.length; // # + 선택 + 데이터컬럼 수
+        const items = dupMatchesForTable_.slice(0, 8);
+        const more = dupMatchesForTable_.length - items.length;
+
+        html += `
+          <tr class="dupWarnRow">
+            <td colspan="${colSpan}">
+              <div class="dupWarnBox">
+                <div class="dupWarnTop">
+                  <span class="dupWarnPill">🔴 이중 출고 의심 ${dupMatchesForTable_.length}건</span>
+                  <span class="dupWarnHint">출고시트 D/E에 검색어가 포함된 기록이 있습니다.</span>
+                </div>
+
+                <div class="dupWarnList">
+                  ${items.map(m=>`
+                    <div class="dupWarnItem">
+                      <div>
+                        <b>요청일</b>: ${escapeHtml(m.reqDate || "-")}
+                        &nbsp;·&nbsp;
+                        <b>C</b>: ${escapeHtml(m.mallNo || "-")}
+                        ${m.colorNm ? `&nbsp;·&nbsp;<b>N</b>: ${escapeHtml(m.colorNm)}` : ``}
+                      </div>
+                      <div class="meta">
+                        <span><b>D</b>: ${escapeHtml(m.dText || "-")}</span>
+                        <span><b>E</b>: ${escapeHtml(m.eText || "-")}</span>
+                      </div>
+                    </div>
+                  `).join("")}
+                  ${more > 0 ? `<div class="dupWarnHint">…외 ${more}건 더 있음</div>` : ``}
+                </div>
+              </div>
+            </td>
+          </tr>
+        `;
+      }
+
       outRows.forEach((o, i)=>{
         const t = stockTypes[i] || "na";
         const trClass = t === "low" ? "low" : t === "out" ? "out" : t === "na" ? "na" : "";
@@ -1495,18 +1510,14 @@ resolve();
       return Array.from(new Set(idxs)).sort((a,b)=>a-b);
     }
 
-   function isTypingTarget_(el){
-  if(!el) return false;
-  const tag = (el.tagName || "").toLowerCase();
-
-  // ✅ 체크박스는 "입력 중"으로 취급하지 않음 (Ctrl+C 단축키 먹게)
-  if(tag === "input" && (el.type || "").toLowerCase() === "checkbox") return false;
-
-  if(tag === "input" || tag === "textarea" || tag === "select") return true;
-  if(el.isContentEditable) return true;
-  return false;
-}
-
+    function isTypingTarget_(el){
+      if(!el) return false;
+      const tag = (el.tagName || "").toLowerCase();
+      if(tag === "input" && (el.type || "").toLowerCase() === "checkbox") return false;
+      if(tag === "input" || tag === "textarea" || tag === "select") return true;
+      if(el.isContentEditable) return true;
+      return false;
+    }
 
     /* ===================== ✅ Ctrl+C: 체크 우선 -> 드래그 행 -> 전체 ===================== */
     async function shortcutCopy_(){
@@ -1551,13 +1562,15 @@ resolve();
 
     /* ===================== 검색 ===================== */
     async function search(){
-      const orderNo = normalizeOrderNo($("orderInput").value);
+      const orderNoRaw = $("orderInput").value;
+      const orderNo = normalizeOrderNo(orderNoRaw);
 
       setPanel("manual", false);
       setPanel("change", false);
       clearStockUI();
       hideExistPanel();
-        hideDupPanel_();  
+
+      dupMatchesForTable_ = [];
       lastOutRows = [];
       lastStockTypes = [];
       originalOutRows = [];
@@ -1578,11 +1591,10 @@ resolve();
       if(!orderLoaded || !existLoaded){
         try{
           await ensureOrderAndExistLoaded_();
-           showDupMatchesByContains_(orderNo);
         }catch{
           $("status").textContent = "발주/출고 로드 실패 (수동 입력 가능)";
+          computeDupMatchesForTable_(orderNoRaw);
           showExistPanelByOrderNo_(orderNo);
-           showDupMatchesByContains_(orderNo);
           setPanel("manual", true);
           $("tableWrap").innerHTML =
             `<div class="no-data">발주서/출고 시트를 불러오지 못했습니다.<br/>아래에서 <strong>상품컬러코드</strong>를 입력하면 재고 확인 후 결과 테이블을 만들 수 있어요.</div>`;
@@ -1592,51 +1604,58 @@ resolve();
         }
       }
 
-     const qRaw = $("orderInput").value;
+      // ✅ 출고시트 D/E 포함 매칭(과학적 표기 복원 포함)
+      computeDupMatchesForTable_(orderNoRaw);
 
-const q = normalizeKey(qRaw);
-const qMall = normalizeOrderNo(qRaw);
-const qLoose = normLoose_(qRaw);
-const qDigits = normDigits_(qRaw);
+      const qRaw = orderNoRaw;
+      const q = normalizeKey(qRaw);
+      const qMall = normalizeOrderNo(qRaw);
+      const qLoose = normLoose_(qRaw);
+      const qDigits = normDigits_(qRaw);
 
-let picked = [];
+      let picked = [];
 
-// 1) 쇼핑몰 주문번호(정확)
-picked = picked.concat(orderIndexByMall.get(qMall) || []);
+      // 1) 쇼핑몰 주문번호(정확)
+      picked = picked.concat(orderIndexByMall.get(qMall) || []);
 
-// 2) 사방넷주문번호(정확)
-picked = picked.concat(orderIndexBySabang.get(q) || []);
+      // 2) 사방넷주문번호(정확)
+      picked = picked.concat(orderIndexBySabang.get(q) || []);
 
-// 3) 운송장 번호(정확, 느슨정규화)
-picked = picked.concat(orderIndexByTracking.get(qLoose) || []);
+      // 3) 운송장 번호(정확, 느슨정규화)
+      picked = picked.concat(orderIndexByTracking.get(qLoose) || []);
 
-// 4) 받는분연락처(정확, 숫자만)
-if(qDigits) picked = picked.concat(orderIndexByPhone.get(qDigits) || []);
+      // 4) 받는분연락처(정확, 숫자만)
+      if(qDigits) picked = picked.concat(orderIndexByPhone.get(qDigits) || []);
 
-// 5) 수령인(부분 포함 검색)
-const idxRecipient = headerIndexMap.get("수령인");
-if(idxRecipient != null && q.length >= 2){
-  const hit = orderRows.filter(r => String(safeGet(r, idxRecipient)).includes(q));
-  picked = picked.concat(hit);
-}
+      // 5) 수령인(부분 포함 검색)
+      const idxRecipient = headerIndexMap.get("수령인");
+      if(idxRecipient != null && q.length >= 2){
+        const hit = orderRows.filter(r => String(safeGet(r, idxRecipient)).includes(q));
+        picked = picked.concat(hit);
+      }
 
-// ✅ 중복 제거(여러 조건에 동시에 걸릴 수 있음)
-const seen = new Set();
-const rows = [];
-for(const r of picked){
-  const sig = r.join("\u0001");
-  if(seen.has(sig)) continue;
-  seen.add(sig);
-  rows.push(r);
-}
+      // ✅ 중복 제거
+      const seen = new Set();
+      const rows = [];
+      for(const r of picked){
+        const sig = r.join("\u0001");
+        if(seen.has(sig)) continue;
+        seen.add(sig);
+        rows.push(r);
+      }
 
       $("status").textContent = rows.length ? `검색 결과: ${rows.length.toLocaleString()}건` : "검색 결과 없음 (수동 입력 가능)";
 
       if(rows.length === 0){
         showExistPanelByOrderNo_(orderNo);
         setPanel("manual", true);
-        $("tableWrap").innerHTML =
-          `<div class="no-data">발주서에서 주문번호를 찾지 못했습니다.<br/>아래에서 <strong>상품컬러코드</strong>를 입력하면 재고 확인 후 결과 테이블을 만들 수 있어요.</div>`;
+
+        // ✅ 발주서 결과가 없어도, “이중출고 경고행”은 보여주고 싶으면
+        //    더미 테이블 1행을 만들어 렌더해서 경고행이 뜨게 함
+        //    (원치 않으면 아래 3줄을 지워도 됨)
+        renderTable([buildOutManual("", "")], ["na"]);
+        $("tableWrap").querySelectorAll("tbody tr[data-idx]").forEach(tr => tr.style.display = "none");
+
         updateToolbar_();
         hideHoverTip_();
         return;
@@ -1664,6 +1683,9 @@ for(const r of picked){
 
       if(!color){ showToast(""); return; }
       if(!stockLoaded){ showToast("재고 로딩 중…"); return; }
+
+      // 수동 입력에서도, 검색창 값으로 이중출고 경고를 띄우고 싶으면:
+      computeDupMatchesForTable_($("orderInput").value);
 
       const out = buildOutManual(color, qty);
       const st = stockStatusByColorCode(out["상품컬러코드"]);
@@ -1750,38 +1772,37 @@ for(const r of picked){
         await shortcutCopy_();
       }
     });
-    /* ===================== 초기화 (버튼 없이 함수로) ===================== */
-function resetAll_(){
-  $("orderInput").value = "";
-  $("manualColor").value = "";
-  $("manualQty").value = "";
-  $("changeColor").value = "";
-  $("changeQty").value = "";
 
-  const sel = $("changeColorSelect");
-  if(sel) sel.value = "";
+    /* ===================== 초기화 ===================== */
+    function resetAll_(){
+      $("orderInput").value = "";
+      $("manualColor").value = "";
+      $("manualQty").value = "";
+      $("changeColor").value = "";
+      $("changeQty").value = "";
 
-  $("status").textContent = "초기화됨";
-  $("tableWrap").innerHTML = `<div class="no-data">검색 결과가 없습니다.</div>`;
-  clearStockUI();
-  hideExistPanel();
-    hideDupPanel_();  
-  setPanel("manual", false);
-  setPanel("change", false);
+      const sel = $("changeColorSelect");
+      if(sel) sel.value = "";
 
-  lastOutRows = [];
-  lastStockTypes = [];
-  originalOutRows = [];
-  lastSource = "none";
-  copyBlocked_ = true;
+      $("status").textContent = "초기화됨";
+      $("tableWrap").innerHTML = `<div class="no-data">검색 결과가 없습니다.</div>`;
+      clearStockUI();
+      hideExistPanel();
+      setPanel("manual", false);
+      setPanel("change", false);
 
-  updateToolbar_();
-  hideHoverTip_();
-}
+      dupMatchesForTable_ = [];
+      lastOutRows = [];
+      lastStockTypes = [];
+      originalOutRows = [];
+      lastSource = "none";
+      copyBlocked_ = true;
 
+      updateToolbar_();
+      hideHoverTip_();
+    }
 
-
-    /* ===================== 검색/버튼 이벤트 ===================== */
+    /* ===================== 시작 ===================== */
     $("orderInput").addEventListener("keydown", (e)=>{
       if(e.key === "Enter") search();
     });
@@ -1789,7 +1810,6 @@ function resetAll_(){
     $("btnChangeApply").addEventListener("click", applyChange);
     $("btnChangeReset").addEventListener("click", resetChange);
 
-    /* ===================== 시작 ===================== */
     initHoverTip_();
     loadStockOnly();
   </script>
