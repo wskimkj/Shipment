@@ -481,6 +481,19 @@ document.addEventListener("keydown", (e)=>{
     }
     function normalizeOrderNo(v){ return normalizeKey(v); }
 
+    function normLoose_(v){
+  return String(v ?? "")
+    .replace(/[\s\-]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function normDigits_(v){
+  return String(v ?? "")
+    .replace(/[^0-9]/g, "");
+}
+
+
     function normColorCode(v){
       return normalizeKey(v).replace(/\s+/g,"").replace(/-/g,"").toUpperCase();
     }
@@ -884,6 +897,13 @@ function showDupMatchesByContains_(needle){
     /* ===================== 데이터 저장 (발주서) ===================== */
     let orderRows = [];
     let orderIndexMap = new Map();
+    // ✅ 추가 인덱스
+let orderIndexByMall = new Map();
+let orderIndexBySabang = new Map();
+let orderIndexByTracking = new Map();
+let orderIndexByPhone = new Map();
+// 수령인(부분검색이 많아서 인덱스 대신 필터로 처리 추천)
+
 
     /* ===================== 상태 ===================== */
     let lastOutRows = [];
@@ -955,17 +975,56 @@ function showDupMatchesByContains_(needle){
           header.forEach((h, idx)=>{ if(h) headerIndexMap.set(h, idx); });
 
           orderRows = rows.slice(1).filter(r => r && r.length > 1);
-
           const matchIdx = getMatchIndexFromHeader_();
-          orderIndexMap = new Map();
-          for(const r of orderRows){
-            const k = normalizeOrderNo(r[matchIdx]);
-            if(!k) continue;
-            if(!orderIndexMap.has(k)) orderIndexMap.set(k, []);
-            orderIndexMap.get(k).push(r);
-          }
-          orderLoaded = true;
-          resolve();
+
+orderIndexMap = new Map();      // (기존) 호환
+orderIndexByMall = new Map();   // ✅ 추가
+orderIndexBySabang = new Map();
+orderIndexByTracking = new Map();
+orderIndexByPhone = new Map();
+
+const idxMall = matchIdx; // 쇼핑몰 주문번호
+const idxSabang = 1;      // B열(사방넷주문번호) - 네 코드에서 고정 사용 중
+
+const idxTracking  = headerIndexMap.get("운송장 번호");
+const idxPhone     = headerIndexMap.get("받는분연락처");
+
+function pushIndex(map, key, row){
+  if(!key) return;
+  if(!map.has(key)) map.set(key, []);
+  map.get(key).push(row);
+}
+
+for(const r of orderRows){
+  const mall = normalizeOrderNo(r[idxMall]);
+  const sabang = normalizeKey(r[idxSabang]);
+
+  // 1) 쇼핑몰 주문번호
+  if(mall){
+    pushIndex(orderIndexMap, mall, r);      // 기존 코드 호환
+    pushIndex(orderIndexByMall, mall, r);   // 새 인덱스
+  }
+
+  // 2) 사방넷주문번호
+  if(sabang) pushIndex(orderIndexBySabang, sabang, r);
+
+  // 3) 운송장 번호
+  if(idxTracking != null){
+    const trk = normLoose_(safeGet(r, idxTracking));
+    if(trk) pushIndex(orderIndexByTracking, trk, r);
+  }
+
+  // 4) 받는분연락처
+  if(idxPhone != null){
+    const ph = normDigits_(safeGet(r, idxPhone));
+    if(ph) pushIndex(orderIndexByPhone, ph, r);
+  }
+}
+
+
+orderLoaded = true;
+resolve();
+         
         });
       });
     }
@@ -1495,7 +1554,44 @@ function showDupMatchesByContains_(needle){
         }
       }
 
-      const rows = orderIndexMap.get(orderNo) || [];
+     const qRaw = $("orderInput").value;
+
+const q = normalizeKey(qRaw);
+const qMall = normalizeOrderNo(qRaw);
+const qLoose = normLoose_(qRaw);
+const qDigits = normDigits_(qRaw);
+
+let picked = [];
+
+// 1) 쇼핑몰 주문번호(정확)
+picked = picked.concat(orderIndexByMall.get(qMall) || []);
+
+// 2) 사방넷주문번호(정확)
+picked = picked.concat(orderIndexBySabang.get(q) || []);
+
+// 3) 운송장 번호(정확, 느슨정규화)
+picked = picked.concat(orderIndexByTracking.get(qLoose) || []);
+
+// 4) 받는분연락처(정확, 숫자만)
+if(qDigits) picked = picked.concat(orderIndexByPhone.get(qDigits) || []);
+
+// 5) 수령인(부분 포함 검색)
+const idxRecipient = headerIndexMap.get("수령인");
+if(idxRecipient != null && q.length >= 2){
+  const hit = orderRows.filter(r => String(safeGet(r, idxRecipient)).includes(q));
+  picked = picked.concat(hit);
+}
+
+// ✅ 중복 제거(여러 조건에 동시에 걸릴 수 있음)
+const seen = new Set();
+const rows = [];
+for(const r of picked){
+  const sig = r.join("\u0001");
+  if(seen.has(sig)) continue;
+  seen.add(sig);
+  rows.push(r);
+}
+
       $("status").textContent = rows.length ? `검색 결과: ${rows.length.toLocaleString()}건` : "검색 결과 없음 (수동 입력 가능)";
 
       if(rows.length === 0){
