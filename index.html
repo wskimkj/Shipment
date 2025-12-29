@@ -493,6 +493,41 @@ function normDigits_(v){
     .replace(/[^0-9]/g, "");
 }
 
+        // ✅ 과학적 표기(E+15 등) → 원래 숫자 문자열로 복원
+    function sciToIntString_(s){
+      s = String(s ?? "").trim();
+      if(!/[eE]/.test(s)) return s;
+
+      const m = s.match(/^([+-]?\d+(?:\.\d+)?)[eE]([+-]?\d+)$/);
+      if(!m) return s;
+
+      let mant = m[1];
+      const exp = parseInt(m[2], 10);
+
+      const sign = mant.startsWith("-") ? "-" : "";
+      mant = mant.replace(/^[+-]/, "");
+
+      const parts = mant.split(".");
+      const intPart = parts[0];
+      const fracPart = parts[1] || "";
+      const digits = (intPart + fracPart).replace(/^0+/, "") || "0";
+
+      const shift = exp - fracPart.length;
+      if(shift >= 0){
+        return sign + digits + "0".repeat(shift);
+      }else{
+        const cut = digits.length + shift;
+        if(cut <= 0) return sign + "0";
+        return sign + digits.slice(0, cut);
+      }
+    }
+
+    // ✅ 포함 검색용 정규화 (CSV 깨짐 대응)
+    function normalizeForContains_(s){
+      return normalizeKey(sciToIntString_(s));
+    }
+
+
 
     function normColorCode(v){
       return normalizeKey(v).replace(/\s+/g,"").replace(/-/g,"").toUpperCase();
@@ -800,7 +835,10 @@ function showDupMatchesByContains_(needle){
     const d = String(safeGet(r, dIdx) ?? "");
     const e = String(safeGet(r, eIdx) ?? "");
     // 포함(contains) 판정: 대소문자/공백 영향 줄이려면 normalizeKey를 함께 써도 됨
-    if(d.includes(q) || e.includes(q)){
+const dNorm = normalizeForContains_(d);
+const eNorm = normalizeForContains_(e);
+
+if(dNorm.includes(q) || eNorm.includes(q)){
       const cText = String(safeGet(r, cIdx) ?? "").trim();
       const dText = d.trim();
       const eText = e.trim();
