@@ -213,7 +213,7 @@
     }
     #hoverTip.show{ display: block; opacity: 1; transform: translateY(0); }
 
-    /* ✅ 상단 요약(재고/발주/주문번호/출고, OK n건, 복사가능) 숨김 */
+    /* ✅ 상단 요약 숨김 */
     #stat2, #stockSummary, #copyGateMsg { display:none !important; }
 
     /* ===================== 🔴 상단 고정 DUP 배너 ===================== */
@@ -366,7 +366,7 @@
         <div class="row">
           <div class="input">
             <span class="field-label">주문번호</span>
-            <input id="orderInput" type="text" placeholder="쇼핑몰 주문번호 입력 (Enter)" />
+            <input id="orderInput" type="text" placeholder="주문번호/송장/연락처/수령인 입력 (Enter)" />
           </div>
         </div>
 
@@ -442,8 +442,6 @@
 
     document.getElementById("orderLink").href = ORDER_SHEET_URL_VIEW;
     document.getElementById("stockLink").href = STOCK_SHEET_URL_VIEW;
-
-    // 링크는 최신(2026)로 걸어둠 (원하면 2025/2026 두 개로 UI 추가 가능)
     document.getElementById("existLink").href = EXIST_SHEET_URL_VIEW_2026;
 
     /* ===================== ✅ ESC: 전체 초기화 ===================== */
@@ -470,9 +468,15 @@
     ];
 
     /* ===================== 결과 테이블 컬럼(화면 숨김 + 복사 전체 포함) ===================== */
+    // ✅ 요구사항 1)
+    // - 추가(노출): 운송장 번호, 받는분연락처  → hide에서 제거
+    // - 숨김(미노출): 바코드, 상품코드     → hide에 추가
     const HIDE_IN_VIEW = new Set([
-      "배송수단","운송장 번호","받는분연락처","받는분 기타연락처","주소","배송메세지",
-      "큐텐(한글상품명)","큐텐바코드","쇼핑몰(참고용)","상품명(수집)","비고","주문자명"
+      "배송메세지","큐텐(한글상품명)","큐텐바코드","쇼핑몰(참고용)","상품명(수집)","비고","주문자명",
+      "받는분 기타연락처","주소",
+      // ✅ 숨김으로 변경
+      "바코드","상품코드"
+      // ✅ "운송장 번호", "받는분연락처" 는 이제 노출이므로 여기서 제거됨
     ]);
 
     const TABLE_COLS_COPY = [
@@ -489,7 +493,8 @@
     const COL_WIDTH = {
       "요청일":80, "사방넷주문번호": 100, "쇼핑몰 주문번호(필수)": 130,"쇼핑몰":80,
       "상품명": 200, "바코드": 120, "상품코드": 100, "상품컬러코드": 120, "결제금액": 80,
-      "옵션(수집)": 120, "_default": 60
+      "옵션(수집)": 120, "운송장 번호": 130, "받는분연락처": 130,
+      "_default": 60
     };
 
     /* ===================== 유틸 ===================== */
@@ -663,8 +668,6 @@
         }).join("") + (more > 0 ? `<div class="dupSub">…외 ${more}건 더 있음</div>` : "");
 
       b.style.display = "flex";
-
-      // 배너 뜰 때 토스트도 한 번
       showToast(`🔴 이중출고 의심 ${count}건`);
     }
 
@@ -1003,7 +1006,6 @@
     /* ===================== 🔴 이중출고 매칭 결과(배너용) ===================== */
     let dupMatchesForTable_ = [];
 
-    // ✅ 출고 시트(2025+2026)에서 검색어가 "포함"된 기록을 찾아서 dupMatchesForTable_에 저장
     function computeDupMatchesForTable_(needleRaw){
       dupMatchesForTable_ = [];
 
@@ -1015,24 +1017,11 @@
         const r = it.row;
         const hm = it.headerMap || new Map();
 
-        // A열(요청일): 0 고정
         const aIdx = 0;
-
-        // C열(쇼핑몰 주문번호)
-        const cIdx =
-          hm.get("쇼핑몰 주문번호(필수)") ??
-          hm.get("쇼핑몰 주문번호") ??
-          2;
-
-        // D/E: 목적/전산 처리방법
+        const cIdx = hm.get("쇼핑몰 주문번호(필수)") ?? hm.get("쇼핑몰 주문번호") ?? 2;
         const dIdx = 3;
         const eIdx = 4;
-
-        // N열(상품컬러명(플레이엠디))
-        const nIdx =
-          hm.get("상품컬러명(플레이엠디)") ??
-          hm.get("상품컬러명") ??
-          13;
+        const nIdx = hm.get("상품컬러명(플레이엠디)") ?? hm.get("상품컬러명") ?? 13;
 
         const d = String(safeGet(r, dIdx) ?? "");
         const e = String(safeGet(r, eIdx) ?? "");
@@ -1054,11 +1043,11 @@
 
     /* ===================== 데이터 저장 (발주서) ===================== */
     let orderRows = [];
-    let orderIndexMap = new Map();
     let orderIndexByMall = new Map();
     let orderIndexBySabang = new Map();
     let orderIndexByTracking = new Map();
     let orderIndexByPhone = new Map();
+    let orderIndexByRecipientContains = []; // (그때그때 스캔) - 유지용
 
     /* ===================== 상태 ===================== */
     let lastOutRows = [];
@@ -1079,7 +1068,6 @@
 
     const ORDER_CACHE_KEY = "SHIPMENT_ORDER_CSV_CACHE_V1";
 
-    // ✅ 출고 캐시 키 2개
     const EXIST_CACHE_KEY_2025 = "SHIPMENT_EXIST_CSV_CACHE_2025_V1";
     const EXIST_CACHE_KEY_2026 = "SHIPMENT_EXIST_CSV_CACHE_2026_V1";
 
@@ -1134,16 +1122,13 @@
           header.forEach((h, idx)=>{ if(h) headerIndexMap.set(h, idx); });
 
           orderRows = rows.slice(1).filter(r => r && r.length > 1);
-          const matchIdx = getMatchIndexFromHeader_();
+          const idxMall = getMatchIndexFromHeader_();
+          const idxSabang = 1;
 
-          orderIndexMap = new Map();
           orderIndexByMall = new Map();
           orderIndexBySabang = new Map();
           orderIndexByTracking = new Map();
           orderIndexByPhone = new Map();
-
-          const idxMall = matchIdx;
-          const idxSabang = 1;
 
           const idxTracking  = headerIndexMap.get("운송장 번호");
           const idxPhone     = headerIndexMap.get("받는분연락처");
@@ -1158,11 +1143,7 @@
             const mall = normalizeOrderNo(r[idxMall]);
             const sabang = normalizeKey(r[idxSabang]);
 
-            if(mall){
-              pushIndex(orderIndexMap, mall, r);
-              pushIndex(orderIndexByMall, mall, r);
-            }
-
+            if(mall) pushIndex(orderIndexByMall, mall, r);
             if(sabang) pushIndex(orderIndexBySabang, sabang, r);
 
             if(idxTracking != null){
@@ -1193,7 +1174,6 @@
 
           const dataRows = rows.slice(1).filter(r => r && r.length > 1);
 
-          // 첫 로드면 초기화
           if(!existLoaded){
             existRows = [];
             existIndexBySabang = new Map();
@@ -1245,7 +1225,7 @@
             parseCsvWithPapa(cached, (results)=>{ buildStockMapsFromParsed_(results); resolve(); });
           });
           stockLoaded = true;
-          rebuildColorSelectOptions_(); // allowAll
+          rebuildColorSelectOptions_();
           setLoadingUI_(false, "재고 로딩 완료 (캐시)");
         }
 
@@ -1256,7 +1236,7 @@
             parseCsvWithPapa(stockCsv, (results)=>{ buildStockMapsFromParsed_(results); resolve(); });
           });
           stockLoaded = true;
-          rebuildColorSelectOptions_(); // allowAll
+          rebuildColorSelectOptions_();
           setLoadingUI_(false, "재고 로딩 완료");
         }else{
           if(!stockLoaded) setLoadingUI_(false, "재고 로드 실패: 시트 공개(보기 가능) 확인");
@@ -1314,7 +1294,6 @@
           const cachedExist2026 = loadCache_(EXIST_CACHE_KEY_2026, ORDEREXIST_CACHE_TTL_MS);
 
           if(cachedOrder && !orderLoaded) await parseOrderCsv_(cachedOrder);
-          // exist는 2개 모두 append 가능
           if(cachedExist2025 && !existLoaded) await parseExistCsv_(cachedExist2025, "2025");
           if(cachedExist2026) await parseExistCsv_(cachedExist2026, "2026");
 
@@ -1682,8 +1661,11 @@
 
     /* ===================== 검색 ===================== */
     async function search(){
-      const orderNoRaw = $("orderInput").value;
-      const orderNo = normalizeOrderNo(orderNoRaw);
+      const inputRaw = $("orderInput").value;
+      const qKey = normalizeKey(inputRaw);
+      const qMall = normalizeOrderNo(inputRaw);
+      const qLoose = normLoose_(inputRaw);
+      const qDigits = normDigits_(inputRaw);
 
       setPanel("manual", false);
       setPanel("change", false);
@@ -1696,8 +1678,8 @@
       lastSource = "none";
       copyBlocked_ = true;
 
-      if(!orderNo){
-        $("tableWrap").innerHTML = `<div class="no-data">주문번호를 입력해주세요.</div>`;
+      if(!qKey){
+        $("tableWrap").innerHTML = `<div class="no-data">검색어를 입력해주세요.</div>`;
         updateToolbar_();
         hideHoverTip_();
         return;
@@ -1721,16 +1703,19 @@
         }
       }
 
-      // ✅ (중요) 발주서 검색 전에 먼저 "출고시트(2025+2026) 중복" 체크 → 배너 표시
-      computeDupMatchesForTable_(orderNoRaw);
+      // ✅ (중요) 검색 전 "출고시트(2025+2026) 중복 포함검색" → 배너 표시
+      computeDupMatchesForTable_(inputRaw);
       renderDupBanner_();
 
-      const qRaw = orderNoRaw;
-
-      const q = normalizeKey(qRaw);
-      const qMall = normalizeOrderNo(qRaw);
-      const qLoose = normLoose_(qRaw);
-      const qDigits = normDigits_(qRaw);
+      /* =========================================================
+         ✅ 요구사항 2) 검색어 매칭:
+           - 사방넷주문번호 (정확)
+           - 쇼핑몰 주문번호(필수) (정확)
+           - 운송장 (정확/느슨정규화)
+           - 수령인 (부분 포함)
+           - 받는분연락처 (숫자만 정확)
+         → 매칭된 행 전부 합쳐서 노출
+         ========================================================= */
 
       let picked = [];
 
@@ -1738,7 +1723,7 @@
       picked = picked.concat(orderIndexByMall.get(qMall) || []);
 
       // 2) 사방넷주문번호(정확)
-      picked = picked.concat(orderIndexBySabang.get(q) || []);
+      picked = picked.concat(orderIndexBySabang.get(qKey) || []);
 
       // 3) 운송장 번호(정확, 느슨정규화)
       picked = picked.concat(orderIndexByTracking.get(qLoose) || []);
@@ -1748,8 +1733,8 @@
 
       // 5) 수령인(부분 포함 검색)
       const idxRecipient = headerIndexMap.get("수령인");
-      if(idxRecipient != null && q.length >= 2){
-        const hit = orderRows.filter(r => String(safeGet(r, idxRecipient)).includes(q));
+      if(idxRecipient != null && qKey.length >= 1){
+        const hit = orderRows.filter(r => String(safeGet(r, idxRecipient)).includes(qKey));
         picked = picked.concat(hit);
       }
 
@@ -1766,10 +1751,12 @@
       $("status").textContent = rows.length ? `검색 결과: ${rows.length.toLocaleString()}건` : "검색 결과 없음 (수동 입력 가능)";
 
       if(rows.length === 0){
-        showExistPanelByOrderNo_(orderNo);
+        // 여기서는 입력이 주문번호가 아닐 수도 있으니, 기존등록 패널은 “그대로(쇼핑몰주문번호 기준)” 보이게 하고 싶으면 유지
+        // 입력값이 실제 주문번호일 때만 제대로 뜨지만, 요구사항은 그대로 유지라서 호출은 유지.
+        showExistPanelByOrderNo_(qMall);
         setPanel("manual", true);
         $("tableWrap").innerHTML =
-          `<div class="no-data">발주서에서 주문번호를 찾지 못했습니다.<br/>아래에서 <strong>상품컬러코드</strong>를 입력하면 재고 확인 후 결과 테이블을 만들 수 있어요.</div>`;
+          `<div class="no-data">발주서에서 일치 항목을 찾지 못했습니다.<br/>아래에서 <strong>상품컬러코드</strong>를 입력하면 재고 확인 후 결과 테이블을 만들 수 있어요.</div>`;
         updateToolbar_();
         hideHoverTip_();
         return;
@@ -1782,7 +1769,9 @@
       originalOutRows = JSON.parse(JSON.stringify(outRows));
       renderTable(outRows, stockTypes);
 
-      showExistPanelByOrderNo_(orderNo);
+      // 기존 등록 패널은 "쇼핑몰 주문번호" 기반으로 보는 용도라서,
+      // 검색어가 다른 값(송장/연락처/수령인)일 수 있어도 일단 기존처럼 유지.
+      showExistPanelByOrderNo_(qMall);
 
       setPanel("change", true);
       $("changeColor").value = normalizeKey(outRows[0]["상품컬러코드"] || "");
