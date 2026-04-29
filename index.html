@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -38,9 +37,8 @@
 
       --pink:#ff8fbc;
 
-      /* ✅ 결과 테이블 전용(요청사항) */
-      --table-font: 11px;   /* 결과 테이블 폰트: 12px -> 11px */
-      --row-pad-y: 7px;    /* 결과 테이블 행 높이(세로 패딩) */
+      --table-font: 11px;
+      --row-pad-y: 7px;
       --row-pad-x: 8px;
        --mini-pad-x: 6px;
     }
@@ -96,6 +94,19 @@
     .badge.low{ background: var(--low-bg); border-color: var(--low-border); color: var(--low-text); }
     .badge.out{ background: var(--out-bg); border-color: var(--out-border); color: var(--out-text); }
     .badge.na{ background: var(--na-bg); border-color: var(--na-border); color: var(--na-text); }
+
+    /* ✅ 출고시트 출처 배너 */
+    .exist-source-banner{
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(170,150,230,.35);
+      background: linear-gradient(90deg, rgba(184,167,255,.18), rgba(255,143,188,.10));
+      font-size: 12px; font-weight: 900;
+      color: rgba(80,60,140,.92);
+      display: none;
+    }
+    .exist-source-banner.show{ display: block; }
 
     .warnline{font-size:11px; font-weight:900;}
     .warnline.low{color: var(--low-text);}
@@ -294,33 +305,30 @@
       flex-wrap:wrap;
     }
 
-    /* ✅ 엑셀식 열 너비 드래그 */
-#tableWrap th{
-  position: sticky; /* 이미 sticky 사용중이면 그대로 */
-  user-select: none;
-}
+    #tableWrap th{
+      position: sticky;
+      user-select: none;
+    }
 
-#tableWrap th .col-resizer{
-  position:absolute;
-  top:0;
-  right:-4px;
-  width:8px;
-  height:100%;
-  cursor: col-resize;
-  z-index: 5;
-}
+    #tableWrap th .col-resizer{
+      position:absolute;
+      top:0;
+      right:-4px;
+      width:8px;
+      height:100%;
+      cursor: col-resize;
+      z-index: 5;
+    }
 
-#tableWrap th.resizing{
-  cursor: col-resize;
-}
+    #tableWrap th.resizing{
+      cursor: col-resize;
+    }
 
-body.col-resize-active{
-  cursor: col-resize !important;
-  user-select:none !important;
-}
+    body.col-resize-active{
+      cursor: col-resize !important;
+      user-select:none !important;
+    }
 
-
-    /* ✅ 결과 테이블(하단)만: 폰트 1px 감소 + 행 높이 조절(패딩 변수 적용) */
     #tableWrap table{
       font-size: var(--table-font);
     }
@@ -331,34 +339,28 @@ body.col-resize-active{
       padding: var(--row-pad-y) var(--row-pad-x);
     }
 
+    #tableWrap table thead th:nth-child(1),
+    #tableWrap table tbody td:nth-child(1){
+      padding-left: var(--mini-pad-x);
+      padding-right: var(--mini-pad-x);
+      min-width: 34px !important;
+      max-width: 34px !important;
+      width: 34px !important;
+      text-align: center;
+    }
+    #tableWrap table thead th:nth-child(2),
+    #tableWrap table tbody td:nth-child(2){
+      padding-left: var(--mini-pad-x);
+      padding-right: var(--mini-pad-x);
+      min-width: 44px !important;
+      max-width: 44px !important;
+      width: 44px !important;
+      text-align: center;
+    }
 
-
-    /* ✅ #, 선택 열 폭/패딩 최적화 */
-#tableWrap table thead th:nth-child(1),
-#tableWrap table tbody td:nth-child(1){
-  padding-left: var(--mini-pad-x);
-  padding-right: var(--mini-pad-x);
-  min-width: 34px !important;
-  max-width: 34px !important;
-  width: 34px !important;
-  text-align: center;
-}
-/*그리고 결과 테이블에서 첫 2열만 패딩/폭 강제:*/
-#tableWrap table thead th:nth-child(2),
-#tableWrap table tbody td:nth-child(2){
-  padding-left: var(--mini-pad-x);
-  padding-right: var(--mini-pad-x);
-  min-width: 44px !important;
-  max-width: 44px !important;
-  width: 44px !important;
-  text-align: center;
-}
-
-/* 체크박스 자체도 조금 작게 */
-#tableWrap input.rowChk{
-  transform: scale(0.95);
-}
-
+    #tableWrap input.rowChk{
+      transform: scale(0.95);
+    }
   </style>
 </head>
 
@@ -380,6 +382,11 @@ body.col-resize-active{
           <span id="stat2"></span>
           <span id="stockSummary"></span>
           <span id="copyGateMsg"></span>
+        </div>
+
+        <!-- ✅ 출고 시트에서 찾았을 때 표시되는 배너 -->
+        <div class="exist-source-banner" id="existSourceBanner">
+          📦 발주서에는 없고, <strong>출고 시트</strong>에서 찾은 결과입니다.
         </div>
 
         <div class="dupBanner" id="dupBanner" style="display:none;">
@@ -466,7 +473,6 @@ body.col-resize-active{
           <button class="btn" id="btnChangeReset">취소</button>
         </div>
 
-        <!-- ✅ 결과 테이블 전용 툴바(행 높이 조절 추가) -->
         <div class="toolbar" id="tableToolbar" style="display:none;">
           <span class="hint">
             행 클릭하면 복사 · 여러 건이면 체크 후 <span class="kbd">변경</span> 적용 ·
@@ -477,13 +483,12 @@ body.col-resize-active{
           <button class="btn" id="btnSelectAll" type="button" style="display:none;">전체 선택</button>
           <button class="btn" id="btnSelectNone" type="button" style="display:none;">선택 해제</button>
 
-       <!-- ✅ 폰트 크기 조절 -->
-<div class="miniinput" style="width:260px;">
-  <span style="font-size:11px;opacity:.75;">폰트</span>
-  <input id="tableFontRange" type="range" min="9" max="14" step="1" value="11" style="width:140px;">
-  <span id="tableFontVal" class="badge ok">11</span>
-</div>
-
+          <div class="miniinput" style="width:260px;">
+            <span style="font-size:11px;opacity:.75;">폰트</span>
+            <input id="tableFontRange" type="range" min="9" max="14" step="1" value="11" style="width:140px;">
+            <span id="tableFontVal" class="badge ok">11</span>
+          </div>
+        </div>
 
         <div class="table-wrap" id="tableWrap">
           <div class="no-data">검색 결과가 없습니다.</div>
@@ -831,16 +836,15 @@ body.col-resize-active{
       el.classList.toggle("show", !!on);
     }
 
-/* ===================== ✅ 결과 테이블 폰트 크기(슬라이더) ===================== */
-function setTableFont_(v){
-  const n = Math.max(8, Number(v) || 11);
-  document.documentElement.style.setProperty("--table-font", `${n}px`);
-  const badge = $("tableFontVal");
-  if(badge) badge.textContent = String(n);
-}
-$("tableFontRange")?.addEventListener("input", (e)=> setTableFont_(e.target.value));
-setTableFont_($("tableFontRange")?.value || 11);
-
+    /* ===================== 결과 테이블 폰트 크기(슬라이더) ===================== */
+    function setTableFont_(v){
+      const n = Math.max(8, Number(v) || 11);
+      document.documentElement.style.setProperty("--table-font", `${n}px`);
+      const badge = $("tableFontVal");
+      if(badge) badge.textContent = String(n);
+    }
+    $("tableFontRange")?.addEventListener("input", (e)=> setTableFont_(e.target.value));
+    setTableFont_($("tableFontRange")?.value || 11);
 
     /* ===================== DUP 배너 ===================== */
     let dupMatchesForTable_ = [];
@@ -924,7 +928,7 @@ setTableFont_($("tableFontRange")?.value || 11);
     function loadStockCache_(){ return loadCache_(STOCK_CACHE_KEY, STOCK_CACHE_TTL_MS); }
     function saveStockCache_(csv){ saveCache_(STOCK_CACHE_KEY, csv); }
 
-    /* ===================== ✅ 스트리밍 파서 (step) ===================== */
+    /* ===================== 스트리밍 파서 (step) ===================== */
     function parseCsvStream_(csvText, { onHeader, onRow, onDone, onError }){
       let headerDone = false;
 
@@ -1010,7 +1014,7 @@ setTableFont_($("tableFontRange")?.value || 11);
       });
     }
 
-    /* ===================== ✅ 발주 데이터(압축 저장 + 인덱스) ===================== */
+    /* ===================== 발주 데이터(압축 저장 + 인덱스) ===================== */
     let orderLoaded = false;
     let orderHeaderMap = new Map();
 
@@ -1020,7 +1024,8 @@ setTableFont_($("tableFontRange")?.value || 11);
     let orderIndexByPhone = new Map();
     let orderAllForRecipientScan = [];
 
-    function compactOrderRow_(rawRow){
+    function compactOrderRow_(rawRow, headerMap){
+      const hm = headerMap || orderHeaderMap;
       const o = {};
       o["__B"] = rawRow[1] ?? "";
       o["__C"] = rawRow[2] ?? "";
@@ -1029,10 +1034,10 @@ setTableFont_($("tableFontRange")?.value || 11);
       for(const h of OUTPUT_HEADERS){
         if(h === "배송수단"){ o[h] = "택배"; continue; }
         if(h === "상품명"){
-          o[h] = rawRow[11] || safeGetByHeader_(rawRow, h) || "";
+          o[h] = rawRow[11] || safeGetByHeader_(rawRow, h, hm) || "";
           continue;
         }
-        o[h] = safeGetByHeader_(rawRow, h) || "";
+        o[h] = safeGetByHeader_(rawRow, h, hm) || "";
       }
 
       o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
@@ -1040,8 +1045,9 @@ setTableFont_($("tableFontRange")?.value || 11);
       return o;
     }
 
-    function safeGetByHeader_(row, headerName){
-      const idx = orderHeaderMap.get(headerName);
+    function safeGetByHeader_(row, headerName, hm){
+      const map = hm || orderHeaderMap;
+      const idx = map.get(headerName);
       if(idx == null || idx < 0) return "";
       return row[idx] ?? "";
     }
@@ -1082,7 +1088,7 @@ setTableFont_($("tableFontRange")?.value || 11);
           onRow: (rawRow)=>{
             if(!rawRow || rawRow.length < 3) return;
 
-            const compact = compactOrderRow_(rawRow);
+            const compact = compactOrderRow_(rawRow, orderHeaderMap);
 
             const mall = normalizeOrderNo(rawRow[idxMall]);
             const sabang = normalizeKey(rawRow[idxSabang]);
@@ -1110,7 +1116,58 @@ setTableFont_($("tableFontRange")?.value || 11);
       });
     }
 
-    /* ===================== ✅ 출고 데이터(압축 저장) ===================== */
+    /* ===================== ✅ 출고 시트 검색용 인덱스 (새로 추가) ===================== */
+    // 출고 시트를 발주서처럼 검색하기 위한 별도 인덱스
+    let existOrderIndexByMall = new Map();
+    let existOrderIndexBySabang = new Map();
+    let existOrderIndexByTracking = new Map();
+    let existOrderIndexByPhone = new Map();
+    let existOrderAllForScan = [];
+
+    function parseExistAsOrderCsvStream_(csvText, sheetTag){
+      return new Promise((resolve, reject)=>{
+        const localHeaderMap = new Map();
+        let idxMall = 2, idxSabang = 1, idxTracking = null, idxPhone = null, idxRecipient = null;
+
+        parseCsvStream_(csvText, {
+          onHeader: (header)=>{
+            header.forEach((h, i)=>{ if(h) localHeaderMap.set(h, i); });
+
+            const m1 = localHeaderMap.get("쇼핑몰 주문번호(필수)");
+            const m2 = localHeaderMap.get("쇼핑몰 주문번호");
+            idxMall = (m1 != null) ? m1 : (m2 != null ? m2 : 2);
+            idxTracking  = localHeaderMap.get("운송장 번호");
+            idxPhone     = localHeaderMap.get("받는분연락처");
+            idxRecipient = localHeaderMap.get("수령인");
+          },
+          onRow: (rawRow)=>{
+            if(!rawRow || rawRow.length < 3) return;
+
+            const compact = compactOrderRow_(rawRow, localHeaderMap);
+            compact.__SHEET_TAG = sheetTag; // 어느 출고 시트에서 왔는지 표시
+
+            const mall    = normalizeOrderNo(rawRow[idxMall]);
+            const sabang  = normalizeKey(rawRow[idxSabang]);
+            const trk     = (idxTracking != null) ? normLoose_(rawRow[idxTracking]) : "";
+            const ph      = (idxPhone != null) ? normDigits_(rawRow[idxPhone]) : "";
+
+            if(mall)   pushIndex_(existOrderIndexByMall, mall, compact);
+            if(sabang) pushIndex_(existOrderIndexBySabang, sabang, compact);
+            if(trk)    pushIndex_(existOrderIndexByTracking, trk, compact);
+            if(ph)     pushIndex_(existOrderIndexByPhone, ph, compact);
+
+            compact.__RECIP = (idxRecipient != null)
+              ? String(rawRow[idxRecipient] ?? "")
+              : String(compact["수령인"] ?? "");
+            existOrderAllForScan.push(compact);
+          },
+          onDone: ()=> resolve(),
+          onError: (e)=> reject(e)
+        });
+      });
+    }
+
+    /* ===================== 출고 데이터(dup용 압축 저장) ===================== */
     let existLoaded = false;
 
     let existRows = [];
@@ -1166,7 +1223,7 @@ setTableFont_($("tableFontRange")?.value || 11);
       });
     }
 
-    /* ===================== ✅ 통합 로더 (캐시 우선 + 백그라운드 갱신) ===================== */
+    /* ===================== 통합 로더 ===================== */
     let orderExistLoadingPromise = null;
     let orderExistRefreshingPromise = null;
 
@@ -1190,15 +1247,23 @@ setTableFont_($("tableFontRange")?.value || 11);
             existRows = [];
             existIndexBySabang = new Map();
             existIndexByMall = new Map();
+            // ✅ 출고 검색 인덱스도 초기화
+            existOrderIndexByMall = new Map();
+            existOrderIndexBySabang = new Map();
+            existOrderIndexByTracking = new Map();
+            existOrderIndexByPhone = new Map();
+            existOrderAllForScan = [];
           }
 
           if(!looksLikeBadCsv(existCsv2025)){
             saveCache_(EXIST_CACHE_KEY_2025, existCsv2025);
             await parseExistCsvStream_(existCsv2025, "2025");
+            await parseExistAsOrderCsvStream_(existCsv2025, "2025");
           }
           if(!looksLikeBadCsv(existCsv2026)){
             saveCache_(EXIST_CACHE_KEY_2026, existCsv2026);
             await parseExistCsvStream_(existCsv2026, "2026");
+            await parseExistAsOrderCsvStream_(existCsv2026, "2026");
           }
         }catch(e){
           console.warn("background refresh failed", e);
@@ -1228,10 +1293,21 @@ setTableFont_($("tableFontRange")?.value || 11);
             existRows = [];
             existIndexBySabang = new Map();
             existIndexByMall = new Map();
+            existOrderIndexByMall = new Map();
+            existOrderIndexBySabang = new Map();
+            existOrderIndexByTracking = new Map();
+            existOrderIndexByPhone = new Map();
+            existOrderAllForScan = [];
           }
 
-          if(cachedExist2025 && !existLoaded) await parseExistCsvStream_(cachedExist2025, "2025");
-          if(cachedExist2026) await parseExistCsvStream_(cachedExist2026, "2026");
+          if(cachedExist2025 && !existLoaded){
+            await parseExistCsvStream_(cachedExist2025, "2025");
+            await parseExistAsOrderCsvStream_(cachedExist2025, "2025");
+          }
+          if(cachedExist2026){
+            await parseExistCsvStream_(cachedExist2026, "2026");
+            await parseExistAsOrderCsvStream_(cachedExist2026, "2026");
+          }
 
           if(orderLoaded && existLoaded){
             setLoadingUI_(false, "로딩 완료 (캐시)");
@@ -1254,14 +1330,21 @@ setTableFont_($("tableFontRange")?.value || 11);
           existRows = [];
           existIndexBySabang = new Map();
           existIndexByMall = new Map();
+          existOrderIndexByMall = new Map();
+          existOrderIndexBySabang = new Map();
+          existOrderIndexByTracking = new Map();
+          existOrderIndexByPhone = new Map();
+          existOrderAllForScan = [];
 
           if(!looksLikeBadCsv(existCsv2025)){
             saveCache_(EXIST_CACHE_KEY_2025, existCsv2025);
             await parseExistCsvStream_(existCsv2025, "2025");
+            await parseExistAsOrderCsvStream_(existCsv2025, "2025");
           }
           if(!looksLikeBadCsv(existCsv2026)){
             saveCache_(EXIST_CACHE_KEY_2026, existCsv2026);
             await parseExistCsvStream_(existCsv2026, "2026");
+            await parseExistAsOrderCsvStream_(existCsv2026, "2026");
           }
 
           setLoadingUI_(false, "로딩 완료");
@@ -1370,6 +1453,7 @@ setTableFont_($("tableFontRange")?.value || 11);
       clearStockUI();
       hideExistPanel();
       hideDupBanner_();
+      hideExistSourceBanner_();
       lastOutRows = [];
       lastStockTypes = [];
       originalOutRows = [];
@@ -1378,6 +1462,10 @@ setTableFont_($("tableFontRange")?.value || 11);
       updateToolbar_();
       hideHoverTip_();
     }
+
+    /* ✅ 출고 시트 출처 배너 */
+    function showExistSourceBanner_(){ $("existSourceBanner").classList.add("show"); }
+    function hideExistSourceBanner_(){ $("existSourceBanner").classList.remove("show"); }
 
     function getCheckedIndexes_(){
       const wrap = $("tableWrap");
@@ -1474,7 +1562,7 @@ setTableFont_($("tableFontRange")?.value || 11);
           <thead>
             <tr>
              <th style="min-width:34px; max-width:34px; width:34px;">#</th>
-<th style="min-width:44px; max-width:44px; width:44px;">선택</th>
+              <th style="min-width:44px; max-width:44px; width:44px;">선택</th>
               ${TABLE_COLS_VIEW.map(c=>{
                 const w = COL_WIDTH[c.label] || COL_WIDTH["_default"];
                 return `<th style="min-width:${w}px; max-width:${w}px;">${escapeHtml(c.label)}</th>`;
@@ -1545,9 +1633,6 @@ setTableFont_($("tableFontRange")?.value || 11);
         td.addEventListener("mouseleave", hideHoverTip_);
       });
       enableExcelLikeResize_();
-
-
-      
     }
 
     function buildTSV(outRows){
@@ -1761,7 +1846,39 @@ setTableFont_($("tableFontRange")?.value || 11);
       showToast("변경 취소됨");
     }
 
-    /* ===================== ✅ 검색 ===================== */
+    /* ===================== 검색 ===================== */
+    function rowMatchesPartial_(o, qKey, qLoose, qDigits){
+      if(!o) return false;
+
+      const fields = [
+        o["__B"], o["__C"],
+        o["운송장 번호"], o["받는분연락처"], o["받는분 기타연락처"],
+        o["수령인"], o["상품명"], o["상품컬러코드"], o["옵션(수집)"], o["주소"],
+      ];
+
+      if(qKey){
+        const q = String(qKey);
+        for(const f of fields){
+          if(String(f ?? "").includes(q)) return true;
+        }
+      }
+      if(qLoose){
+        const q = String(qLoose);
+        for(const f of fields){
+          if(normLoose_(String(f ?? "")).includes(q)) return true;
+        }
+      }
+      if(qDigits){
+        const q = String(qDigits);
+        for(const f of fields){
+          const d = normDigits_(String(f ?? ""));
+          if(d && d.includes(q)) return true;
+        }
+      }
+
+      return false;
+    }
+
     async function search(){
       const inputRaw = $("orderInput").value;
       const qKey = normalizeKey(inputRaw);
@@ -1796,79 +1913,26 @@ setTableFont_($("tableFontRange")?.value || 11);
         }
       }
 
-      function rowMatchesPartial_(o, qKey, qLoose, qDigits){
-  // qKey: 원문 기반(공백 제거 전), qLoose: 공백/하이픈 제거, qDigits: 숫자만
-  if(!o) return false;
-
-  const fields = [
-    o["__B"],                 // 사방넷주문번호
-    o["__C"],                 // 쇼핑몰 주문번호
-    o["운송장 번호"],
-    o["받는분연락처"],
-    o["받는분 기타연락처"],
-    o["수령인"],
-    o["상품명"],
-    o["상품컬러코드"],
-    o["옵션(수집)"],
-    o["주소"],                // (compact에 있으면)
-  ];
-
-  // 1) 텍스트 포함(느슨하게)
-  if(qKey){
-    const q = String(qKey);
-    for(const f of fields){
-      const s = String(f ?? "");
-      if(s.includes(q)) return true;
-    }
-  }
-
-  // 2) 공백/하이픈 제거한 포함
-  if(qLoose){
-    const q = String(qLoose);
-    for(const f of fields){
-      const s = String(f ?? "");
-      if(normLoose_(s).includes(q)) return true;
-    }
-  }
-
-  // 3) 숫자만 포함(연락처/송장/주문번호 등에 강함)
-  if(qDigits){
-    const q = String(qDigits);
-    for(const f of fields){
-      const s = String(f ?? "");
-      const d = normDigits_(s);
-      if(d && d.includes(q)) return true;
-    }
-  }
-
-  return false;
-}
-
-
+      /* ── 1. 발주서 검색 ── */
       let picked = [];
-// ✅ 1) 빠른 exact/인덱스 검색(기존 유지)
-picked = picked.concat(orderIndexByMall.get(qMall) || []);
-picked = picked.concat(orderIndexBySabang.get(qKey) || []);
-picked = picked.concat(orderIndexByTracking.get(qLoose) || []);
-if(qDigits) picked = picked.concat(orderIndexByPhone.get(qDigits) || []);
+      picked = picked.concat(orderIndexByMall.get(qMall) || []);
+      picked = picked.concat(orderIndexBySabang.get(qKey) || []);
+      picked = picked.concat(orderIndexByTracking.get(qLoose) || []);
+      if(qDigits) picked = picked.concat(orderIndexByPhone.get(qDigits) || []);
 
-// ✅ 2) 부분 포함 검색(추가)
-// 너무 짧은 글자는 과다 매칭될 수 있어서 2자 이상일 때만 텍스트 포함을 권장
-const allowTextContains = qKey && qKey.length >= 2;
+      const allowTextContains = qKey && qKey.length >= 2;
+      const allowDigitContains = qDigits && qDigits.length >= 3;
 
-// 숫자 검색은 3자리 이상이면 의미 있게 매칭되니 허용
-const allowDigitContains = qDigits && qDigits.length >= 3;
-
-if(allowTextContains || allowDigitContains){
-  const partialHits = orderAllForRecipientScan.filter(o =>
-    rowMatchesPartial_(o,
-      allowTextContains ? qKey : "",
-      allowTextContains ? qLoose : "",
-      allowDigitContains ? qDigits : ""
-    )
-  );
-  picked = picked.concat(partialHits);
-}
+      if(allowTextContains || allowDigitContains){
+        const partialHits = orderAllForRecipientScan.filter(o =>
+          rowMatchesPartial_(o,
+            allowTextContains ? qKey : "",
+            allowTextContains ? qLoose : "",
+            allowDigitContains ? qDigits : ""
+          )
+        );
+        picked = picked.concat(partialHits);
+      }
 
       const seen = new Set();
       const outRows = [];
@@ -1879,17 +1943,67 @@ if(allowTextContains || allowDigitContains){
         outRows.push(o);
       }
 
-      $("status").textContent = outRows.length ? `검색 결과: ${outRows.length.toLocaleString()}건` : "검색 결과 없음 (수동 입력 가능)";
-
+      /* ── 2. 발주서에 없으면 출고 시트에서도 검색 ── */
       if(outRows.length === 0){
+        let existPicked = [];
+        existPicked = existPicked.concat(existOrderIndexByMall.get(qMall) || []);
+        existPicked = existPicked.concat(existOrderIndexBySabang.get(qKey) || []);
+        existPicked = existPicked.concat(existOrderIndexByTracking.get(qLoose) || []);
+        if(qDigits) existPicked = existPicked.concat(existOrderIndexByPhone.get(qDigits) || []);
+
+        if(allowTextContains || allowDigitContains){
+          const partialHits = existOrderAllForScan.filter(o =>
+            rowMatchesPartial_(o,
+              allowTextContains ? qKey : "",
+              allowTextContains ? qLoose : "",
+              allowDigitContains ? qDigits : ""
+            )
+          );
+          existPicked = existPicked.concat(partialHits);
+        }
+
+        const existSeen = new Set();
+        const existOutRows = [];
+        for(const o of existPicked){
+          const sig = (o["__B"]||"") + "|" + (o["__C"]||"") + "|" + (o["상품컬러코드"]||"") + "|" + (o["요청일"]||"") + "|" + (o["수량"]||"");
+          if(existSeen.has(sig)) continue;
+          existSeen.add(sig);
+          existOutRows.push(o);
+        }
+
+        if(existOutRows.length > 0){
+          // 출고 시트에서 찾음
+          const stockTypes = existOutRows.map(o => stockStatusByColorCode(o["상품컬러코드"]).type);
+          lastSource = "sheet";
+          originalOutRows = JSON.parse(JSON.stringify(existOutRows));
+          $("status").textContent = `출고 시트 검색 결과: ${existOutRows.length.toLocaleString()}건`;
+          showExistSourceBanner_();
+          renderTable(existOutRows, stockTypes);
+
+          setPanel("change", true);
+          $("changeColor").value = normalizeKey(existOutRows[0]["상품컬러코드"] || "");
+          $("changeQty").value = normalizeKey(existOutRows[0]["수량"] || "");
+          refreshColorDropdownByCurrentRows_();
+
+          setTimeout(()=>{
+            try{ computeDupMatchesForTable_(inputRaw); renderDupBanner_(); }catch(e){ console.warn(e); }
+            try{ showExistPanelByOrderNo_(qMall); }catch(e){ console.warn(e); }
+          }, 0);
+          return;
+        }
+
+        // 둘 다 없음
+        $("status").textContent = "검색 결과 없음 (수동 입력 가능)";
         setPanel("manual", true);
         $("tableWrap").innerHTML =
-          `<div class="no-data">발주서에서 일치 항목을 찾지 못했습니다.<br/>아래에서 <strong>상품컬러코드</strong>를 입력하면 재고 확인 후 결과 테이블을 만들 수 있어요.</div>`;
+          `<div class="no-data">발주서와 출고 시트 모두에서 일치 항목을 찾지 못했습니다.<br/>아래에서 <strong>상품컬러코드</strong>를 입력하면 재고 확인 후 결과 테이블을 만들 수 있어요.</div>`;
         updateToolbar_();
         hideHoverTip_();
         return;
       }
 
+      /* ── 3. 발주서에서 찾은 경우 (기존 로직) ── */
+      $("status").textContent = `검색 결과: ${outRows.length.toLocaleString()}건`;
       const stockTypes = outRows.map(o => stockStatusByColorCode(o["상품컬러코드"]).type);
       lastSource = "sheet";
       originalOutRows = JSON.parse(JSON.stringify(outRows));
@@ -1901,14 +2015,8 @@ if(allowTextContains || allowDigitContains){
       refreshColorDropdownByCurrentRows_();
 
       setTimeout(()=>{
-        try{
-          computeDupMatchesForTable_(inputRaw);
-          renderDupBanner_();
-        }catch(e){ console.warn(e); }
-
-        try{
-          showExistPanelByOrderNo_(qMall);
-        }catch(e){ console.warn(e); }
+        try{ computeDupMatchesForTable_(inputRaw); renderDupBanner_(); }catch(e){ console.warn(e); }
+        try{ showExistPanelByOrderNo_(qMall); }catch(e){ console.warn(e); }
       }, 0);
     }
 
@@ -1948,6 +2056,7 @@ if(allowTextContains || allowDigitContains){
       clearStockUI();
       hideExistPanel();
       hideDupBanner_();
+      hideExistSourceBanner_();
       setPanel("manual", false);
       setPanel("change", false);
 
@@ -1961,111 +2070,96 @@ if(allowTextContains || allowDigitContains){
       hideHoverTip_();
     }
 
-    /* ===================== ✅ 엑셀식 열 리사이즈 ===================== */
-// 컬럼 라벨별로 너비 저장 (렌더링 다시 해도 유지)
-let colWidthOverride = {}; // { "상품명": 260, "수령인": 120, ... }
+    /* ===================== 엑셀식 열 리사이즈 ===================== */
+    let colWidthOverride = {};
+    const COL_MIN_W = 40;
+    const COL_MAX_W = 600;
 
-// 최소/최대 너비
-const COL_MIN_W = 40;
-const COL_MAX_W = 600;
-
-// 현재 저장된 너비 적용해서 가져오기
-function getColWidth_(label){
-  const saved = colWidthOverride[label];
-  if(saved != null) return saved;
-  return COL_WIDTH[label] || COL_WIDTH["_default"] || 60;
-}
-
-// th/td에 폭 적용
-function applyColWidthToTable_(tableEl, colIndex, px){
-  const w = Math.max(COL_MIN_W, Math.min(COL_MAX_W, px));
-
-  // thead
-  const ths = tableEl.querySelectorAll("thead th");
-  if(ths[colIndex]){
-    ths[colIndex].style.minWidth = w + "px";
-    ths[colIndex].style.maxWidth = w + "px";
-    ths[colIndex].style.width = w + "px";
-  }
-
-  // tbody cells
-  tableEl.querySelectorAll("tbody tr").forEach(tr=>{
-    const tds = tr.querySelectorAll("td");
-    if(tds[colIndex]){
-      tds[colIndex].style.minWidth = w + "px";
-      tds[colIndex].style.maxWidth = w + "px";
-      tds[colIndex].style.width = w + "px";
+    function getColWidth_(label){
+      const saved = colWidthOverride[label];
+      if(saved != null) return saved;
+      return COL_WIDTH[label] || COL_WIDTH["_default"] || 60;
     }
-  });
-}
 
-// 렌더링 후 th에 리사이즈 핸들 붙이기
-function enableExcelLikeResize_(){
-  const wrap = $("tableWrap");
-  const table = wrap?.querySelector("table");
-  if(!table) return;
+    function applyColWidthToTable_(tableEl, colIndex, px){
+      const w = Math.max(COL_MIN_W, Math.min(COL_MAX_W, px));
 
-  const ths = table.querySelectorAll("thead th");
-  // 현재 테이블의 컬럼 라벨 배열(보이는 컬럼 기준)
-  // 지금 구조: 0:#, 1:선택, 2부터 TABLE_COLS_VIEW 라벨들
-  const labels = ["#", "선택", ...TABLE_COLS_VIEW.map(c=>c.label)];
+      const ths = tableEl.querySelectorAll("thead th");
+      if(ths[colIndex]){
+        ths[colIndex].style.minWidth = w + "px";
+        ths[colIndex].style.maxWidth = w + "px";
+        ths[colIndex].style.width = w + "px";
+      }
 
-  // 1) 저장된 폭(th/td)에 먼저 반영
-  labels.forEach((label, idx)=>{
-    const w = getColWidth_(label);
-    applyColWidthToTable_(table, idx, w);
-  });
+      tableEl.querySelectorAll("tbody tr").forEach(tr=>{
+        const tds = tr.querySelectorAll("td");
+        if(tds[colIndex]){
+          tds[colIndex].style.minWidth = w + "px";
+          tds[colIndex].style.maxWidth = w + "px";
+          tds[colIndex].style.width = w + "px";
+        }
+      });
+    }
 
-  // 2) 핸들 부착(중복 방지)
-  ths.forEach((th, idx)=>{
-    if(th.querySelector(".col-resizer")) return; // 이미 있으면 패스
-    th.style.position = "sticky"; // 혹시 모를 보호(이미 sticky여도 OK)
-    th.style.position = "sticky";
-    th.style.top = "0"; // sticky 헤더 유지
+    function enableExcelLikeResize_(){
+      const wrap = $("tableWrap");
+      const table = wrap?.querySelector("table");
+      if(!table) return;
 
-    const handle = document.createElement("div");
-    handle.className = "col-resizer";
-    th.appendChild(handle);
+      const ths = table.querySelectorAll("thead th");
+      const labels = ["#", "선택", ...TABLE_COLS_VIEW.map(c=>c.label)];
 
-    let startX = 0;
-    let startW = 0;
-    let isResizing = false;
+      labels.forEach((label, idx)=>{
+        const w = getColWidth_(label);
+        applyColWidthToTable_(table, idx, w);
+      });
 
-    const onMove = (e)=>{
-      if(!isResizing) return;
-      const dx = e.clientX - startX;
-      const nextW = startW + dx;
-      applyColWidthToTable_(table, idx, nextW);
+      ths.forEach((th, idx)=>{
+        if(th.querySelector(".col-resizer")) return;
+        th.style.position = "sticky";
+        th.style.top = "0";
 
-      // 저장 (라벨 기준)
-      const label = labels[idx] || `COL_${idx}`;
-      colWidthOverride[label] = Math.max(COL_MIN_W, Math.min(COL_MAX_W, nextW));
-    };
+        const handle = document.createElement("div");
+        handle.className = "col-resizer";
+        th.appendChild(handle);
 
-    const onUp = ()=>{
-      if(!isResizing) return;
-      isResizing = false;
-      document.body.classList.remove("col-resize-active");
-      th.classList.remove("resizing");
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
+        let startX = 0;
+        let startW = 0;
+        let isResizing = false;
 
-    handle.addEventListener("mousedown", (e)=>{
-      e.preventDefault();
-      e.stopPropagation(); // 클릭 복사 같은 것 방지
-      isResizing = true;
-      startX = e.clientX;
-      startW = th.getBoundingClientRect().width;
+        const onMove = (e)=>{
+          if(!isResizing) return;
+          const dx = e.clientX - startX;
+          const nextW = startW + dx;
+          applyColWidthToTable_(table, idx, nextW);
 
-      document.body.classList.add("col-resize-active");
-      th.classList.add("resizing");
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
-    });
-  });
-}
+          const label = labels[idx] || `COL_${idx}`;
+          colWidthOverride[label] = Math.max(COL_MIN_W, Math.min(COL_MAX_W, nextW));
+        };
 
+        const onUp = ()=>{
+          if(!isResizing) return;
+          isResizing = false;
+          document.body.classList.remove("col-resize-active");
+          th.classList.remove("resizing");
+          window.removeEventListener("mousemove", onMove);
+          window.removeEventListener("mouseup", onUp);
+        };
+
+        handle.addEventListener("mousedown", (e)=>{
+          e.preventDefault();
+          e.stopPropagation();
+          isResizing = true;
+          startX = e.clientX;
+          startW = th.getBoundingClientRect().width;
+
+          document.body.classList.add("col-resize-active");
+          th.classList.add("resizing");
+          window.addEventListener("mousemove", onMove);
+          window.addEventListener("mouseup", onUp);
+        });
+      });
+    }
 
     /* ===================== 이벤트 ===================== */
     $("orderInput").addEventListener("keydown", (e)=>{
