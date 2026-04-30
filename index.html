@@ -37,7 +37,7 @@
 
       --pink:#ff8fbc;
 
-      --table-font: 11px;
+      --table-font: 9px;
       --row-pad-y: 7px;
       --row-pad-x: 8px;
        --mini-pad-x: 6px;
@@ -532,8 +532,8 @@
 
           <div class="miniinput" style="width:260px;">
             <span style="font-size:11px;opacity:.75;">폰트</span>
-            <input id="tableFontRange" type="range" min="9" max="14" step="1" value="11" style="width:140px;">
-            <span id="tableFontVal" class="badge ok">11</span>
+            <input id="tableFontRange" type="range" min="9" max="14" step="1" value="9" style="width:140px;">
+            <span id="tableFontVal" class="badge ok">9</span>
           </div>
         </div>
 
@@ -917,7 +917,7 @@
       if(badge) badge.textContent = String(n);
     }
     $("tableFontRange")?.addEventListener("input", (e)=> setTableFont_(e.target.value));
-    setTableFont_($("tableFontRange")?.value || 11);
+    setTableFont_($("tableFontRange")?.value || 9);
 
     /* ===================== DUP 배너 ===================== */
     let dupMatchesForTable_ = [];
@@ -1189,75 +1189,48 @@
       });
     }
 
-    /* ===================== 출고 시트 검색용 인덱스 (raw 방식) ===================== */
+    /* ===================== 출고 시트 검색용 인덱스 (발주서와 동일 방식) ===================== */
     let existOrderIndexByMall = new Map();
     let existOrderIndexBySabang = new Map();
     let existOrderIndexByTracking = new Map();
     let existOrderIndexByPhone = new Map();
     let existOrderAllForScan = [];
 
-    // 출고 시트 헤더 저장 (렌더링에 사용)
-    let existSheetHeaders = [];
-
-    // raw row: { __headers: [...], __vals: [...], __SHEET_TAG }
-    function rowMatchesPartialRaw_(o, qKey, qLoose, qDigits){
-      if(!o || !o.__vals) return false;
-      const fields = o.__vals;
-      if(qKey){
-        for(const f of fields){ if(String(f ?? "").includes(qKey)) return true; }
-      }
-      if(qLoose){
-        for(const f of fields){ if(normLoose_(String(f ?? "")).includes(qLoose)) return true; }
-      }
-      if(qDigits){
-        for(const f of fields){
-          const d = normDigits_(String(f ?? ""));
-          if(d && d.includes(qDigits)) return true;
-        }
-      }
-      return false;
-    }
-
     function parseExistAsOrderCsvStream_(csvText, sheetTag){
       return new Promise((resolve, reject)=>{
         const localHeaderMap = new Map();
-        let idxMall = -1, idxSabang = -1, idxTracking = -1, idxPhone = -1;
+        let idxMall = 2, idxSabang = 1, idxTracking = null, idxPhone = null, idxRecipient = null;
 
         parseCsvStream_(csvText, {
           onHeader: (header)=>{
-            // 헤더 저장 (2025/2026 중 먼저 온 것 기준)
-            if(existSheetHeaders.length === 0) existSheetHeaders = header;
-            header.forEach((h, i)=>{
-              if(h) localHeaderMap.set(h, i);
-            });
+            header.forEach((h, i)=>{ if(h) localHeaderMap.set(h, i); });
             const m1 = localHeaderMap.get("쇼핑몰 주문번호(필수)");
             const m2 = localHeaderMap.get("쇼핑몰 주문번호");
-            idxMall    = (m1 != null) ? m1 : (m2 != null ? m2 : 2);
-            idxSabang  = localHeaderMap.get("사방넷주문번호") ?? localHeaderMap.get("사방넷 주문번호") ?? 1;
-            idxTracking = localHeaderMap.get("운송장 번호") ?? -1;
-            idxPhone    = localHeaderMap.get("받는분연락처") ?? -1;
+            idxMall     = (m1 != null) ? m1 : (m2 != null ? m2 : 2);
+            idxTracking = localHeaderMap.get("운송장 번호") ?? null;
+            idxPhone    = localHeaderMap.get("받는분연락처") ?? null;
+            idxRecipient= localHeaderMap.get("수령인") ?? null;
           },
           onRow: (rawRow)=>{
-            if(!rawRow || rawRow.length < 2) return;
-            // 값이 전부 빈 행 스킵
-            if(rawRow.every(v => !String(v ?? "").trim())) return;
+            if(!rawRow || rawRow.length < 3) return;
 
-            const o = {
-              __SHEET_TAG: sheetTag,
-              __vals: rawRow.map(v => String(v ?? "")),
-            };
+            const compact = compactOrderRow_(rawRow, localHeaderMap);
+            compact.__SHEET_TAG = sheetTag;
 
             const mall   = normalizeOrderNo(rawRow[idxMall] ?? "");
             const sabang = normalizeKey(rawRow[idxSabang] ?? "");
-            const trk    = idxTracking >= 0 ? normLoose_(rawRow[idxTracking] ?? "") : "";
-            const ph     = idxPhone >= 0 ? normDigits_(rawRow[idxPhone] ?? "") : "";
+            const trk    = idxTracking != null ? normLoose_(rawRow[idxTracking] ?? "") : "";
+            const ph     = idxPhone    != null ? normDigits_(rawRow[idxPhone] ?? "")   : "";
 
-            if(mall)   pushIndex_(existOrderIndexByMall, mall, o);
-            if(sabang) pushIndex_(existOrderIndexBySabang, sabang, o);
-            if(trk)    pushIndex_(existOrderIndexByTracking, trk, o);
-            if(ph)     pushIndex_(existOrderIndexByPhone, ph, o);
+            if(mall)   pushIndex_(existOrderIndexByMall,    mall,   compact);
+            if(sabang) pushIndex_(existOrderIndexBySabang,  sabang, compact);
+            if(trk)    pushIndex_(existOrderIndexByTracking,trk,    compact);
+            if(ph)     pushIndex_(existOrderIndexByPhone,   ph,     compact);
 
-            existOrderAllForScan.push(o);
+            compact.__RECIP = idxRecipient != null
+              ? String(rawRow[idxRecipient] ?? "")
+              : String(compact["수령인"] ?? "");
+            existOrderAllForScan.push(compact);
           },
           onDone: ()=> resolve(),
           onError: (e)=> reject(e)
@@ -1350,7 +1323,6 @@
             existOrderIndexByTracking = new Map();
             existOrderIndexByPhone = new Map();
             existOrderAllForScan = [];
-            existSheetHeaders = [];
           }
 
           if(!looksLikeBadCsv(existCsv2025)){
@@ -1396,7 +1368,6 @@
             existOrderIndexByTracking = new Map();
             existOrderIndexByPhone = new Map();
             existOrderAllForScan = [];
-            existSheetHeaders = [];
           }
 
           if(cachedExist2025 && !existLoaded){
@@ -1434,7 +1405,6 @@
           existOrderIndexByTracking = new Map();
           existOrderIndexByPhone = new Map();
           existOrderAllForScan = [];
-          existSheetHeaders = [];
 
           if(!looksLikeBadCsv(existCsv2025)){
             saveCache_(EXIST_CACHE_KEY_2025, existCsv2025);
@@ -1730,7 +1700,7 @@
       updateCopyGateBySelection_();
     }
 
-    /* ===================== 출고 시트 테이블 렌더 (raw 헤더 기반) ===================== */
+    /* ===================== 출고 시트 테이블 렌더 (발주서와 동일 방식) ===================== */
     function renderExistTable_(outRows){
       lastExistOutRows = outRows || [];
 
@@ -1743,37 +1713,20 @@
         return;
       }
 
-      const headers = existSheetHeaders.length > 0
-        ? existSheetHeaders
-        : (outRows[0]?.__vals?.map((_, i) => `열${i+1}`) || []);
-
-      const COL_W = 100;
-
-      let html = `<table><thead><tr>
-        <th style="min-width:34px;max-width:34px;width:34px;">#</th>
-        <th style="min-width:60px;max-width:60px;width:60px;">시트</th>
-        ${headers.map(h => `<th style="min-width:${COL_W}px;">${escapeHtml(h)}</th>`).join("")}
-      </tr></thead><tbody>`;
-
-      outRows.forEach((o, i)=>{
-        const vals = o.__vals || [];
-        html += `<tr data-idx="${i}">
-          <td class="copy" data-copy="${i+1}">${i+1}</td>
-          <td class="copy" data-copy="${escapeHtml(o.__SHEET_TAG||"")}" style="font-size:10px;opacity:.7;">${escapeHtml(o.__SHEET_TAG||"")}</td>
-          ${headers.map((_, hi) => {
-            const v = String(vals[hi] ?? "");
-            return `<td class="copy" style="min-width:${COL_W}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" data-copy="${escapeHtml(v)}">${escapeHtml(v)}</td>`;
-          }).join("")}
-        </tr>`;
-      });
-
-      html += `</tbody></table>`;
-
+      const stockTypes = outRows.map(o => stockStatusByColorCode(o["상품컬러코드"]).type);
       cntBadge.textContent = `${outRows.length}건`;
-      wrap.innerHTML = html;
+      wrap.innerHTML = buildTableHtml_(outRows, stockTypes, "exist");
       section.style.display = "block";
 
+      wrap.querySelectorAll("input.rowChk").forEach(chk=>{
+        chk.addEventListener("change", ()=>{
+          const tr = chk.closest("tr");
+          if(tr) tr.classList.toggle("is-selected", chk.checked);
+        });
+      });
+
       attachCellEvents_(wrap);
+      enableExcelLikeResize_(wrap, "exist");
     }
 
     /* 셀 클릭/호버 이벤트 공통 */
@@ -2126,7 +2079,7 @@
 
       if(allowTextContains || allowDigitContains){
         const partialHits = existOrderAllForScan.filter(o =>
-          rowMatchesPartialRaw_(o,
+          rowMatchesPartial_(o,
             allowTextContains ? qKey : "",
             allowTextContains ? qLoose : "",
             allowDigitContains ? qDigits : ""
@@ -2134,8 +2087,7 @@
         );
         existPicked = existPicked.concat(partialHits);
       }
-      // raw 행은 객체 참조 기준으로 중복 제거
-      const existOutRows = Array.from(new Set(existPicked));
+      const existOutRows = deduplicateRows_(existPicked);
 
       /* ── 3. 결과 표시 ── */
       const hasOrder = orderOutRows.length > 0;
