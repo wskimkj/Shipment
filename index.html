@@ -1249,7 +1249,6 @@
             }
           },
           onDone: ()=>{
-            existLoaded = true;
             resolve();
           },
           onError: (e)=> reject(e)
@@ -1407,6 +1406,9 @@
             await parseExistCsvStream_(existCsv2026, "2026");
             await parseExistAsOrderCsvStream_(existCsv2026, "2026");
           }
+          if(!looksLikeBadCsv(existCsv2025) || !looksLikeBadCsv(existCsv2026)){
+            existLoaded = true;
+          }
         }catch(e){
           console.warn("background refresh failed", e);
         }finally{
@@ -1440,15 +1442,16 @@
             existOrderIndexByTracking = new Map();
             existOrderIndexByPhone = new Map();
             existOrderAllForScan = [];
-          }
 
-          if(cachedExist2025 && !existLoaded){
-            await parseExistCsvStream_(cachedExist2025, "2025");
-            await parseExistAsOrderCsvStream_(cachedExist2025, "2025");
-          }
-          if(cachedExist2026){
-            await parseExistCsvStream_(cachedExist2026, "2026");
-            await parseExistAsOrderCsvStream_(cachedExist2026, "2026");
+            if(cachedExist2025){
+              await parseExistCsvStream_(cachedExist2025, "2025");
+              await parseExistAsOrderCsvStream_(cachedExist2025, "2025");
+            }
+            if(cachedExist2026){
+              await parseExistCsvStream_(cachedExist2026, "2026");
+              await parseExistAsOrderCsvStream_(cachedExist2026, "2026");
+            }
+            existLoaded = true;
           }
 
           if(orderLoaded && existLoaded){
@@ -1489,6 +1492,7 @@
             await parseExistAsOrderCsvStream_(existCsv2026, "2026");
           }
 
+          existLoaded = true;
           setLoadingUI_(false, "로딩 완료");
         }catch(e){
           console.error(e);
