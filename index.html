@@ -1189,49 +1189,75 @@
       });
     }
 
-    /* ===================== 출고 시트 검색용 인덱스 ===================== */
+    /* ===================== 출고 시트 검색용 인덱스 (raw 방식) ===================== */
     let existOrderIndexByMall = new Map();
     let existOrderIndexBySabang = new Map();
     let existOrderIndexByTracking = new Map();
     let existOrderIndexByPhone = new Map();
     let existOrderAllForScan = [];
 
+    // 출고 시트 헤더 저장 (렌더링에 사용)
+    let existSheetHeaders = [];
+
+    // raw row: { __headers: [...], __vals: [...], __SHEET_TAG }
+    function rowMatchesPartialRaw_(o, qKey, qLoose, qDigits){
+      if(!o || !o.__vals) return false;
+      const fields = o.__vals;
+      if(qKey){
+        for(const f of fields){ if(String(f ?? "").includes(qKey)) return true; }
+      }
+      if(qLoose){
+        for(const f of fields){ if(normLoose_(String(f ?? "")).includes(qLoose)) return true; }
+      }
+      if(qDigits){
+        for(const f of fields){
+          const d = normDigits_(String(f ?? ""));
+          if(d && d.includes(qDigits)) return true;
+        }
+      }
+      return false;
+    }
+
     function parseExistAsOrderCsvStream_(csvText, sheetTag){
       return new Promise((resolve, reject)=>{
         const localHeaderMap = new Map();
-        let idxMall = 2, idxSabang = 1, idxTracking = null, idxPhone = null, idxRecipient = null;
+        let idxMall = -1, idxSabang = -1, idxTracking = -1, idxPhone = -1;
 
         parseCsvStream_(csvText, {
           onHeader: (header)=>{
-            header.forEach((h, i)=>{ if(h) localHeaderMap.set(h, i); });
-
+            // 헤더 저장 (2025/2026 중 먼저 온 것 기준)
+            if(existSheetHeaders.length === 0) existSheetHeaders = header;
+            header.forEach((h, i)=>{
+              if(h) localHeaderMap.set(h, i);
+            });
             const m1 = localHeaderMap.get("쇼핑몰 주문번호(필수)");
             const m2 = localHeaderMap.get("쇼핑몰 주문번호");
-            idxMall = (m1 != null) ? m1 : (m2 != null ? m2 : 2);
-            idxTracking  = localHeaderMap.get("운송장 번호");
-            idxPhone     = localHeaderMap.get("받는분연락처");
-            idxRecipient = localHeaderMap.get("수령인");
+            idxMall    = (m1 != null) ? m1 : (m2 != null ? m2 : 2);
+            idxSabang  = localHeaderMap.get("사방넷주문번호") ?? localHeaderMap.get("사방넷 주문번호") ?? 1;
+            idxTracking = localHeaderMap.get("운송장 번호") ?? -1;
+            idxPhone    = localHeaderMap.get("받는분연락처") ?? -1;
           },
           onRow: (rawRow)=>{
-            if(!rawRow || rawRow.length < 3) return;
+            if(!rawRow || rawRow.length < 2) return;
+            // 값이 전부 빈 행 스킵
+            if(rawRow.every(v => !String(v ?? "").trim())) return;
 
-            const compact = compactOrderRow_(rawRow, localHeaderMap);
-            compact.__SHEET_TAG = sheetTag;
+            const o = {
+              __SHEET_TAG: sheetTag,
+              __vals: rawRow.map(v => String(v ?? "")),
+            };
 
-            const mall    = normalizeOrderNo(rawRow[idxMall]);
-            const sabang  = normalizeKey(rawRow[idxSabang]);
-            const trk     = (idxTracking != null) ? normLoose_(rawRow[idxTracking]) : "";
-            const ph      = (idxPhone != null) ? normDigits_(rawRow[idxPhone]) : "";
+            const mall   = normalizeOrderNo(rawRow[idxMall] ?? "");
+            const sabang = normalizeKey(rawRow[idxSabang] ?? "");
+            const trk    = idxTracking >= 0 ? normLoose_(rawRow[idxTracking] ?? "") : "";
+            const ph     = idxPhone >= 0 ? normDigits_(rawRow[idxPhone] ?? "") : "";
 
-            if(mall)   pushIndex_(existOrderIndexByMall, mall, compact);
-            if(sabang) pushIndex_(existOrderIndexBySabang, sabang, compact);
-            if(trk)    pushIndex_(existOrderIndexByTracking, trk, compact);
-            if(ph)     pushIndex_(existOrderIndexByPhone, ph, compact);
+            if(mall)   pushIndex_(existOrderIndexByMall, mall, o);
+            if(sabang) pushIndex_(existOrderIndexBySabang, sabang, o);
+            if(trk)    pushIndex_(existOrderIndexByTracking, trk, o);
+            if(ph)     pushIndex_(existOrderIndexByPhone, ph, o);
 
-            compact.__RECIP = (idxRecipient != null)
-              ? String(rawRow[idxRecipient] ?? "")
-              : String(compact["수령인"] ?? "");
-            existOrderAllForScan.push(compact);
+            existOrderAllForScan.push(o);
           },
           onDone: ()=> resolve(),
           onError: (e)=> reject(e)
@@ -1324,6 +1350,7 @@
             existOrderIndexByTracking = new Map();
             existOrderIndexByPhone = new Map();
             existOrderAllForScan = [];
+            existSheetHeaders = [];
           }
 
           if(!looksLikeBadCsv(existCsv2025)){
@@ -1369,6 +1396,7 @@
             existOrderIndexByTracking = new Map();
             existOrderIndexByPhone = new Map();
             existOrderAllForScan = [];
+            existSheetHeaders = [];
           }
 
           if(cachedExist2025 && !existLoaded){
@@ -1406,6 +1434,7 @@
           existOrderIndexByTracking = new Map();
           existOrderIndexByPhone = new Map();
           existOrderAllForScan = [];
+          existSheetHeaders = [];
 
           if(!looksLikeBadCsv(existCsv2025)){
             saveCache_(EXIST_CACHE_KEY_2025, existCsv2025);
@@ -1701,8 +1730,8 @@
       updateCopyGateBySelection_();
     }
 
-    /* ===================== 출고 시트 테이블 렌더 ===================== */
-    function renderExistTable_(outRows, stockTypes){
+    /* ===================== 출고 시트 테이블 렌더 (raw 헤더 기반) ===================== */
+    function renderExistTable_(outRows){
       lastExistOutRows = outRows || [];
 
       const wrap = $("existTableWrap");
@@ -1714,20 +1743,37 @@
         return;
       }
 
-      cntBadge.textContent = `${outRows.length}건`;
-      wrap.innerHTML = buildTableHtml_(outRows, stockTypes, "exist");
-      section.style.display = "block";
+      const headers = existSheetHeaders.length > 0
+        ? existSheetHeaders
+        : (outRows[0]?.__vals?.map((_, i) => `열${i+1}`) || []);
 
-      // 체크박스는 출고 시트 결과에서도 동작하도록 (단순 선택 표시)
-      wrap.querySelectorAll("input.rowChk").forEach(chk=>{
-        chk.addEventListener("change", ()=>{
-          const tr = chk.closest("tr");
-          if(tr) tr.classList.toggle("is-selected", chk.checked);
-        });
+      const COL_W = 100;
+
+      let html = `<table><thead><tr>
+        <th style="min-width:34px;max-width:34px;width:34px;">#</th>
+        <th style="min-width:60px;max-width:60px;width:60px;">시트</th>
+        ${headers.map(h => `<th style="min-width:${COL_W}px;">${escapeHtml(h)}</th>`).join("")}
+      </tr></thead><tbody>`;
+
+      outRows.forEach((o, i)=>{
+        const vals = o.__vals || [];
+        html += `<tr data-idx="${i}">
+          <td class="copy" data-copy="${i+1}">${i+1}</td>
+          <td class="copy" data-copy="${escapeHtml(o.__SHEET_TAG||"")}" style="font-size:10px;opacity:.7;">${escapeHtml(o.__SHEET_TAG||"")}</td>
+          ${headers.map((_, hi) => {
+            const v = String(vals[hi] ?? "");
+            return `<td class="copy" style="min-width:${COL_W}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" data-copy="${escapeHtml(v)}">${escapeHtml(v)}</td>`;
+          }).join("")}
+        </tr>`;
       });
 
+      html += `</tbody></table>`;
+
+      cntBadge.textContent = `${outRows.length}건`;
+      wrap.innerHTML = html;
+      section.style.display = "block";
+
       attachCellEvents_(wrap);
-      enableExcelLikeResize_(wrap, "exist");
     }
 
     /* 셀 클릭/호버 이벤트 공통 */
@@ -2071,7 +2117,7 @@
       }
       const orderOutRows = deduplicateRows_(orderPicked);
 
-      /* ── 2. 출고 시트 검색 (항상 수행) ── */
+      /* ── 2. 출고 시트 검색 (항상 수행, raw 방식) ── */
       let existPicked = [];
       existPicked = existPicked.concat(existOrderIndexByMall.get(qMall) || []);
       existPicked = existPicked.concat(existOrderIndexBySabang.get(qKey) || []);
@@ -2080,7 +2126,7 @@
 
       if(allowTextContains || allowDigitContains){
         const partialHits = existOrderAllForScan.filter(o =>
-          rowMatchesPartial_(o,
+          rowMatchesPartialRaw_(o,
             allowTextContains ? qKey : "",
             allowTextContains ? qLoose : "",
             allowDigitContains ? qDigits : ""
@@ -2088,7 +2134,8 @@
         );
         existPicked = existPicked.concat(partialHits);
       }
-      const existOutRows = deduplicateRows_(existPicked);
+      // raw 행은 객체 참조 기준으로 중복 제거
+      const existOutRows = Array.from(new Set(existPicked));
 
       /* ── 3. 결과 표시 ── */
       const hasOrder = orderOutRows.length > 0;
@@ -2113,7 +2160,7 @@
       if(hasExist) parts.push(`출고 시트 ${existOutRows.length}건`);
       $("status").textContent = `검색 결과: ${parts.join(" / ")}`;
 
-      // 발주서 결과 렌더
+      // 발주서 결과 렌더 (항상)
       if(hasOrder){
         lastSource = "order";
         const orderStockTypes = orderOutRows.map(o => stockStatusByColorCode(o["상품컬러코드"]).type);
@@ -2126,21 +2173,9 @@
         refreshColorDropdownByCurrentRows_();
       }
 
-      // 출고 시트 결과 렌더
+      // 출고 시트 결과 렌더 (항상 — raw 방식, stockTypes 불필요)
       if(hasExist){
-        const existStockTypes = existOutRows.map(o => stockStatusByColorCode(o["상품컬러코드"]).type);
-        renderExistTable_(existOutRows, existStockTypes);
-
-        // 발주서 결과가 없으면 변경 패널은 출고 시트 기준으로
-        if(!hasOrder){
-          lastSource = "order"; // 변경 패널 동작을 위해
-          lastOutRows = existOutRows;
-          originalOutRows = JSON.parse(JSON.stringify(existOutRows));
-          setPanel("change", true);
-          $("changeColor").value = normalizeKey(existOutRows[0]["상품컬러코드"] || "");
-          $("changeQty").value = normalizeKey(existOutRows[0]["수량"] || "");
-          refreshColorDropdownByCurrentRows_();
-        }
+        renderExistTable_(existOutRows);
       }
 
       setTimeout(()=>{
