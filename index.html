@@ -1306,6 +1306,12 @@
       o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
       o["요청일"] = attachStockToRequestDate_(o["요청일"], o["상품컬러코드"]);
       return o;
+
+    function compactExistRowWithRaw_(rawRow, headerMap){
+      const o = compactExistRow_(rawRow, headerMap);
+      o["__rawText"] = rawRow.map(v => String(v ?? "").trim()).join("\t");
+      return o;
+    }
     }
 
     function parseExistAsOrderCsvStream_(csvText, sheetTag){
@@ -1341,7 +1347,7 @@
 
             if(rawRow.every(v => !String(v ?? "").trim())) return;
 
-            const compact = compactExistRow_(rawRow, localHeaderMap);
+            const compact = compactExistRowWithRaw_(rawRow, localHeaderMap);
             compact.__SHEET_TAG = sheetTag;
 
             const mall   = idxMall   >= 0 ? normalizeOrderNo(rawRow[idxMall] ?? "")  : "";
@@ -2080,7 +2086,10 @@
       const seen = new Set();
       const out = [];
       for(const o of rows){
-        const sig = (o["__B"]||"") + "|" + (o["__C"]||"") + "|" + (o["상품컬러코드"]||"") + "|" + (o["요청일"]||"") + "|" + (o["수량"]||"");
+        // 출고 시트는 __B/__C가 비어있으므로 rawText 기준으로 중복 제거
+        const sig = o["__rawText"]
+          ? o["__rawText"]
+          : (o["__B"]||"") + "|" + (o["__C"]||"") + "|" + (o["상품컬러코드"]||"") + "|" + (o["요청일"]||"") + "|" + (o["수량"]||"");
         if(seen.has(sig)) continue;
         seen.add(sig);
         out.push(o);
@@ -2146,24 +2155,12 @@
       }
       const orderOutRows = deduplicateRows_(orderPicked);
 
-      /* ── 2. 출고 시트 검색 (항상 수행, raw 방식) ── */
-      let existPicked = [];
-      existPicked = existPicked.concat(existOrderIndexByMall.get(qMall) || []);
-      existPicked = existPicked.concat(existOrderIndexBySabang.get(qKey) || []);
-      existPicked = existPicked.concat(existOrderIndexByTracking.get(qLoose) || []);
-      if(qDigits) existPicked = existPicked.concat(existOrderIndexByPhone.get(qDigits) || []);
-
-      if(allowTextContains || allowDigitContains){
-        const partialHits = existOrderAllForScan.filter(o =>
-          rowMatchesPartial_(o,
-            allowTextContains ? qKey : "",
-            allowTextContains ? qLoose : "",
-            allowDigitContains ? qDigits : ""
+      /* ── 2. 출고 시트 검색 (전체 셀 텍스트 contains 방식) ── */
+      const existOutRows = qKey.length >= 1
+        ? existOrderAllForScan.filter(o =>
+            o["__rawText"] && o["__rawText"].toLowerCase().includes(qKey.toLowerCase())
           )
-        );
-        existPicked = existPicked.concat(partialHits);
-      }
-      const existOutRows = deduplicateRows_(existPicked);
+        : [];
 
       /* ── 3. 결과 표시 ── */
       const hasOrder = orderOutRows.length > 0;
