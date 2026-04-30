@@ -1189,58 +1189,8 @@
       });
     }
 
-    /* ===================== 출고 시트 검색용 인덱스 (발주서와 동일 방식) ===================== */
-    let existOrderIndexByMall = new Map();
-    let existOrderIndexBySabang = new Map();
-    let existOrderIndexByTracking = new Map();
-    let existOrderIndexByPhone = new Map();
-    let existOrderAllForScan = [];
-
-    function parseExistAsOrderCsvStream_(csvText, sheetTag){
-      return new Promise((resolve, reject)=>{
-        const localHeaderMap = new Map();
-        let idxMall = 2, idxSabang = 1, idxTracking = null, idxPhone = null, idxRecipient = null;
-
-        parseCsvStream_(csvText, {
-          onHeader: (header)=>{
-            header.forEach((h, i)=>{ if(h) localHeaderMap.set(h, i); });
-            const m1 = localHeaderMap.get("쇼핑몰 주문번호(필수)");
-            const m2 = localHeaderMap.get("쇼핑몰 주문번호");
-            idxMall     = (m1 != null) ? m1 : (m2 != null ? m2 : 2);
-            idxTracking = localHeaderMap.get("운송장 번호") ?? null;
-            idxPhone    = localHeaderMap.get("받는분연락처") ?? null;
-            idxRecipient= localHeaderMap.get("수령인") ?? null;
-          },
-          onRow: (rawRow)=>{
-            if(!rawRow || rawRow.length < 3) return;
-
-            const compact = compactOrderRow_(rawRow, localHeaderMap);
-            compact.__SHEET_TAG = sheetTag;
-
-            const mall   = normalizeOrderNo(rawRow[idxMall] ?? "");
-            const sabang = normalizeKey(rawRow[idxSabang] ?? "");
-            const trk    = idxTracking != null ? normLoose_(rawRow[idxTracking] ?? "") : "";
-            const ph     = idxPhone    != null ? normDigits_(rawRow[idxPhone] ?? "")   : "";
-
-            if(mall)   pushIndex_(existOrderIndexByMall,    mall,   compact);
-            if(sabang) pushIndex_(existOrderIndexBySabang,  sabang, compact);
-            if(trk)    pushIndex_(existOrderIndexByTracking,trk,    compact);
-            if(ph)     pushIndex_(existOrderIndexByPhone,   ph,     compact);
-
-            compact.__RECIP = idxRecipient != null
-              ? String(rawRow[idxRecipient] ?? "")
-              : String(compact["수령인"] ?? "");
-            existOrderAllForScan.push(compact);
-          },
-          onDone: ()=> resolve(),
-          onError: (e)=> reject(e)
-        });
-      });
-    }
-
     /* ===================== 출고 데이터 (dup용) ===================== */
     let existLoaded = false;
-
     let existRows = [];
     let existIndexBySabang = new Map();
     let existIndexByMall = new Map();
@@ -1253,25 +1203,38 @@
         let purposeIdx = 3;
         let methodIdx = 4;
         let colorIdx = 13;
+        let rowCount = 0;
 
         parseCsvStream_(csvText, {
           onHeader: (header)=>{
-            header.forEach((h, i)=>{ if(h) headerMap.set(h, i); });
-
-            sabangIdx = headerMap.get("사방넷주문번호") ?? headerMap.get("사방넷 주문번호") ?? null;
-            mallIdx   = headerMap.get("쇼핑몰 주문번호(필수)") ?? headerMap.get("쇼핑몰 주문번호") ?? null;
-            dateIdx   = headerMap.get("기록일") ?? headerMap.get("등록일") ?? headerMap.get("작성일") ?? null;
-
-            colorIdx = headerMap.get("상품컬러명(플레이엠디)") ?? headerMap.get("상품컬러명") ?? 13;
+            // 1행은 스킵, rowCount로 처리
+            rowCount = 0;
           },
           onRow: (r)=>{
-            const sabang = normalizeKey(sabangIdx != null ? r[sabangIdx] : "");
-            const mall   = normalizeOrderNo(mallIdx != null ? r[mallIdx] : "");
+            // 출고 시트 2행이 실제 헤더
+            if(rowCount === 0){
+              rowCount++;
+              r.forEach((h, i)=>{
+                const hk = normalizeKey(h);
+                if(hk) headerMap.set(hk, i);
+              });
+              sabangIdx = headerMap.get("사방넷주문번호") ?? headerMap.get("사방넷 주문번호") ?? null;
+              mallIdx   = headerMap.get("쇼핑몰 주문번호(필수)") ?? headerMap.get("쇼핑몰 주문번호") ?? null;
+              dateIdx   = headerMap.get("기록일") ?? headerMap.get("등록일") ?? headerMap.get("작성일") ?? null;
+              colorIdx  = headerMap.get("상품컬러명(플레이엠디)") ?? headerMap.get("상품컬러명") ?? 13;
+              purposeIdx = headerMap.get("목적") ?? 3;
+              methodIdx  = headerMap.get("전산 처리 방법") ?? 4;
+              return;
+            }
+            rowCount++;
+
+            const sabang  = normalizeKey(sabangIdx != null ? r[sabangIdx] : "");
+            const mall    = normalizeOrderNo(mallIdx != null ? r[mallIdx] : "");
             const reqDate = String(r[reqDateIdx] ?? "").trim();
             const purpose = String(r[purposeIdx] ?? "").trim();
             const method  = String(r[methodIdx] ?? "").trim();
             const colorNm = String(r[colorIdx] ?? "").trim();
-            const dt = String(dateIdx != null ? (r[dateIdx] ?? "") : "").trim();
+            const dt      = String(dateIdx != null ? (r[dateIdx] ?? "") : "").trim();
 
             const item = { sheetTag, reqDate, sabang, mall, purpose, method, colorNm, dateText: dt };
             existRows.push(item);
@@ -1289,6 +1252,115 @@
             existLoaded = true;
             resolve();
           },
+          onError: (e)=> reject(e)
+        });
+      });
+    }
+
+    /* ===================== 출고 시트 검색용 인덱스 (발주서와 동일 방식) ===================== */
+    let existOrderIndexByMall = new Map();
+    let existOrderIndexBySabang = new Map();
+    let existOrderIndexByTracking = new Map();
+    let existOrderIndexByPhone = new Map();
+    let existOrderAllForScan = [];
+
+    // 출고 시트 헤더(2행) → OUTPUT_HEADERS 키 매핑
+    const EXIST_HEADER_MAP = {
+      "요청일":                   "요청일",
+      "수령인":                   "수령인",
+      "배송수단":                 "배송수단",
+      "운송장 번호":              "운송장 번호",
+      "받는분연락처":             "받는분연락처",
+      "받는분기타연락처":         "받는분 기타연락처",
+      "주소":                     "주소",
+      "배송메세지":               "배송메세지",
+      "상품컬러명(플레이엠디)":   "상품명",
+      "수량":                     "수량",
+      "결제금액":                 "결제금액",
+      "큐텐(한글상품명)":         "큐텐(한글상품명)",
+      "바코드":                   "바코드",
+      "큐텐바코드":               "큐텐바코드",
+      "상품코드":                 "상품코드",
+      "쇼핑몰(참고용)":           "쇼핑몰(참고용)",
+      "상품컬러코드":             "상품컬러코드",
+      "상품명(수집)":             "상품명(수집)",
+      "옵션(수집)":               "옵션(수집)",
+      "주문자명":                 "주문자명",
+      "비고":                     "비고",
+    };
+
+    function compactExistRow_(rawRow, headerMap){
+      const o = {};
+      o["__B"] = "";
+      o["__C"] = "";
+      o["__D"] = "";
+      for(const h of OUTPUT_HEADERS) o[h] = "";
+      o["배송수단"] = "택배";
+
+      headerMap.forEach((colIdx, existHeader)=>{
+        const targetKey = EXIST_HEADER_MAP[existHeader];
+        if(!targetKey) return;
+        const val = String(rawRow[colIdx] ?? "").trim();
+        if(val) o[targetKey] = val;
+      });
+
+      o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
+      o["요청일"] = attachStockToRequestDate_(o["요청일"], o["상품컬러코드"]);
+      return o;
+    }
+
+    function parseExistAsOrderCsvStream_(csvText, sheetTag){
+      return new Promise((resolve, reject)=>{
+        const localHeaderMap = new Map();
+        let rowCount = 0;
+        let idxTracking = null, idxPhone = null, idxRecipient = null;
+        let idxMall = -1, idxSabang = -1;
+
+        parseCsvStream_(csvText, {
+          onHeader: ()=>{ rowCount = 0; }, // 1행은 실제 헤더 아님 → 무시
+          onRow: (rawRow)=>{
+            if(!rawRow || rawRow.length < 2) return;
+
+            // 출고 시트 2행 = 실제 헤더
+            if(rowCount === 0){
+              rowCount++;
+              rawRow.forEach((h, i)=>{
+                const hk = normalizeKey(h);
+                if(hk) localHeaderMap.set(hk, i);
+              });
+              // 출고 시트에 쇼핑몰 주문번호가 있으면 사용, 없으면 -1
+              const m1 = localHeaderMap.get("쇼핑몰 주문번호(필수)");
+              const m2 = localHeaderMap.get("쇼핑몰 주문번호");
+              idxMall     = (m1 != null) ? m1 : (m2 != null ? m2 : -1);
+              idxSabang   = localHeaderMap.get("사방넷주문번호") ?? localHeaderMap.get("사방넷 주문번호") ?? -1;
+              idxTracking = localHeaderMap.get("운송장 번호") ?? null;
+              idxPhone    = localHeaderMap.get("받는분연락처") ?? null;
+              idxRecipient= localHeaderMap.get("수령인") ?? null;
+              return;
+            }
+            rowCount++;
+
+            if(rawRow.every(v => !String(v ?? "").trim())) return;
+
+            const compact = compactExistRow_(rawRow, localHeaderMap);
+            compact.__SHEET_TAG = sheetTag;
+
+            const mall   = idxMall   >= 0 ? normalizeOrderNo(rawRow[idxMall] ?? "")  : "";
+            const sabang = idxSabang >= 0 ? normalizeKey(rawRow[idxSabang] ?? "")    : "";
+            const trk    = idxTracking != null ? normLoose_(rawRow[idxTracking] ?? "") : "";
+            const ph     = idxPhone    != null ? normDigits_(rawRow[idxPhone] ?? "")   : "";
+
+            if(mall)   pushIndex_(existOrderIndexByMall,    mall,   compact);
+            if(sabang) pushIndex_(existOrderIndexBySabang,  sabang, compact);
+            if(trk)    pushIndex_(existOrderIndexByTracking,trk,    compact);
+            if(ph)     pushIndex_(existOrderIndexByPhone,   ph,     compact);
+
+            compact.__RECIP = idxRecipient != null
+              ? String(rawRow[idxRecipient] ?? "")
+              : String(compact["수령인"] ?? "");
+            existOrderAllForScan.push(compact);
+          },
+          onDone: ()=> resolve(),
           onError: (e)=> reject(e)
         });
       });
