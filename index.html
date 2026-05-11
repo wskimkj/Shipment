@@ -2230,6 +2230,30 @@
       }
     });
 
+        /* ===================== Shift+C : 강제 복사 (재고 경고 무시) ===================== */
+document.addEventListener("keydown", async (e)=>{
+  if(e.key !== "C") return;           // 대문자 C = Shift+C
+  if(e.ctrlKey || e.altKey || e.metaKey) return;
+  if(isTypingTarget_(e.target)) return;
+  if(!lastOutRows || lastOutRows.length === 0){
+    showToast("복사할 결과 없음");
+    return;
+  }
+
+  e.preventDefault();
+
+  let idxs = getCheckedIndexes_();
+  if(!idxs.length){
+    const dragIdxs = getSelectedRowIndexesByDrag_();
+    if(dragIdxs.length) idxs = dragIdxs;
+  }
+  if(!idxs.length) idxs = lastOutRows.map((_, i)=>i);
+
+  const rowsToCopy = idxs.map(i => lastOutRows[i]).filter(Boolean);
+  await writeClipboardRows_(rowsToCopy);
+  showToast(`⚠️ 강제 복사됨 (${rowsToCopy.length}건)`);
+});
+
     /* ===================== 초기화 ===================== */
     function resetAll_(){
       $("orderInput").value = "";
