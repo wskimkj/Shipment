@@ -1322,12 +1322,8 @@ function compactExistRowWithRaw_(rawRow, headerMap){
   return o;
 }
 
-    function compactExistRowWithRaw_(rawRow, headerMap){
-      const o = compactExistRow_(rawRow, headerMap);
-      o["__rawText"] = rawRow.map(v => String(v ?? "").trim()).join("\t");
-      return o;
-    }
-    }
+    
+
 
     function parseExistAsOrderCsvStream_(csvText, sheetTag){
       return new Promise((resolve, reject)=>{
