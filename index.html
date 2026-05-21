@@ -689,13 +689,7 @@
         .replace(/[\u200B-\u200D\uFEFF]/g, "")
         .trim();
     }
-function normalizeOrderNo(v){
-  return normalizeKey(sciToIntString_(v))
-    .replace(/[\u200B-\u200D\uFEFF]/g, "")
-    .replace(/['"]/g, "")
-    .replace(/[\s\-]/g, "")
-    .toUpperCase();
-}
+    function normalizeOrderNo(v){ return normalizeKey(v); }
 
     function normLoose_(v){
       return String(v ?? "")
@@ -1156,11 +1150,9 @@ function normalizeOrderNo(v){
           onHeader: (header)=>{
             header.forEach((h, i)=>{ if(h) orderHeaderMap.set(h, i); });
 
-            const mallHeader = Array.from(orderHeaderMap.keys()).find(h =>
-  h.replace(/\s/g, "").includes("쇼핑몰주문번호")
-);
-
-idxMall = mallHeader ? orderHeaderMap.get(mallHeader) : 2;
+            const m1 = orderHeaderMap.get("쇼핑몰 주문번호(필수)");
+            const m2 = orderHeaderMap.get("쇼핑몰 주문번호");
+            idxMall = (m1 != null) ? m1 : (m2 != null ? m2 : 2);
 
             idxTracking  = orderHeaderMap.get("운송장 번호");
             idxPhone     = orderHeaderMap.get("받는분연락처");
@@ -1171,8 +1163,8 @@ idxMall = mallHeader ? orderHeaderMap.get(mallHeader) : 2;
 
             const compact = compactOrderRow_(rawRow, orderHeaderMap);
 
-            const mall = normalizeOrderNo(sciToIntString_(rawRow[idxMall]));
-            const sabang = normalizeKey(sciToIntString_(rawRow[idxSabang]));
+            const mall = normalizeOrderNo(rawRow[idxMall]);
+            const sabang = normalizeKey(rawRow[idxSabang]);
             const trk = (idxTracking != null) ? normLoose_(rawRow[idxTracking]) : "";
             const ph  = (idxPhone != null) ? normDigits_(rawRow[idxPhone]) : "";
 
@@ -1296,36 +1288,31 @@ idxMall = mallHeader ? orderHeaderMap.get(mallHeader) : 2;
       "비고":                     "비고",
     };
 
-   function compactExistRow_(rawRow, headerMap){
-  const o = {};
-  o["__B"] = "";
-  o["__C"] = "";
-  o["__D"] = "";
+    function compactExistRow_(rawRow, headerMap){
+      const o = {};
+      o["__B"] = "";
+      o["__C"] = "";
+      o["__D"] = "";
+      for(const h of OUTPUT_HEADERS) o[h] = "";
+      o["배송수단"] = "택배";
 
-  for(const h of OUTPUT_HEADERS) o[h] = "";
-  o["배송수단"] = "택배";
+      headerMap.forEach((colIdx, existHeader)=>{
+        const targetKey = EXIST_HEADER_MAP[existHeader];
+        if(!targetKey) return;
+        const val = String(rawRow[colIdx] ?? "").trim();
+        if(val) o[targetKey] = val;
+      });
 
-  headerMap.forEach((colIdx, existHeader)=>{
-    const targetKey = EXIST_HEADER_MAP[existHeader];
-    if(!targetKey) return;
-    const val = String(rawRow[colIdx] ?? "").trim();
-    if(val) o[targetKey] = val;
-  });
+      o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
+      o["요청일"] = attachStockToRequestDate_(o["요청일"], o["상품컬러코드"]);
+      return o;
 
-  o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
-  o["요청일"] = attachStockToRequestDate_(o["요청일"], o["상품컬러코드"]);
-
-  return o;
-}
-
-function compactExistRowWithRaw_(rawRow, headerMap){
-  const o = compactExistRow_(rawRow, headerMap);
-  o["__rawText"] = rawRow.map(v => String(v ?? "").trim()).join("\t");
-  return o;
-}
-
-    
-
+    function compactExistRowWithRaw_(rawRow, headerMap){
+      const o = compactExistRow_(rawRow, headerMap);
+      o["__rawText"] = rawRow.map(v => String(v ?? "").trim()).join("\t");
+      return o;
+    }
+    }
 
     function parseExistAsOrderCsvStream_(csvText, sheetTag){
       return new Promise((resolve, reject)=>{
@@ -2112,7 +2099,7 @@ function compactExistRowWithRaw_(rawRow, headerMap){
 
     async function search(){
       const inputRaw = $("orderInput").value;
-      const qKey = normalizeOrderNo(inputRaw);
+      const qKey = normalizeKey(inputRaw);
       const qMall = normalizeOrderNo(inputRaw);
       const qLoose = normLoose_(inputRaw);
       const qDigits = normDigits_(inputRaw);
@@ -2406,11 +2393,7 @@ document.addEventListener("keydown", async (e)=>{
 
     /* ===================== 시작 ===================== */
     initHoverTip_();
-
-(async ()=>{
-  await loadStockOnly();
-  ensureOrderAndExistLoaded_();
-})();
+    loadStockOnly();
   </script>
 </body>
 </html>
