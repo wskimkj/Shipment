@@ -689,7 +689,10 @@
         .replace(/[\u200B-\u200D\uFEFF]/g, "")
         .trim();
     }
-    function normalizeOrderNo(v){ return normalizeKey(v); }
+    function normalizeOrderNo(v){
+  return normalizeKey(sciToIntString_(v))
+    .replace(/[\s\-]/g, "");
+}
 
     function normLoose_(v){
       return String(v ?? "")
@@ -2100,7 +2103,7 @@
     async function search(){
       const inputRaw = $("orderInput").value;
       const qKey = normalizeKey(sciToIntString_(inputRaw));
-      const qMall = normalizeOrderNo(sciToIntString_(inputRaw))
+      cconst qMall = normalizeOrderNo(inputRaw);
       const qLoose = normLoose_(inputRaw);
       const qDigits = normDigits_(inputRaw);
 
