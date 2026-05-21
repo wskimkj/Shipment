@@ -1294,24 +1294,33 @@ function normalizeOrderNo(v){
       "비고":                     "비고",
     };
 
-    function compactExistRow_(rawRow, headerMap){
-      const o = {};
-      o["__B"] = "";
-      o["__C"] = "";
-      o["__D"] = "";
-      for(const h of OUTPUT_HEADERS) o[h] = "";
-      o["배송수단"] = "택배";
+   function compactExistRow_(rawRow, headerMap){
+  const o = {};
+  o["__B"] = "";
+  o["__C"] = "";
+  o["__D"] = "";
 
-      headerMap.forEach((colIdx, existHeader)=>{
-        const targetKey = EXIST_HEADER_MAP[existHeader];
-        if(!targetKey) return;
-        const val = String(rawRow[colIdx] ?? "").trim();
-        if(val) o[targetKey] = val;
-      });
+  for(const h of OUTPUT_HEADERS) o[h] = "";
+  o["배송수단"] = "택배";
 
-      o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
-      o["요청일"] = attachStockToRequestDate_(o["요청일"], o["상품컬러코드"]);
-      return o;
+  headerMap.forEach((colIdx, existHeader)=>{
+    const targetKey = EXIST_HEADER_MAP[existHeader];
+    if(!targetKey) return;
+    const val = String(rawRow[colIdx] ?? "").trim();
+    if(val) o[targetKey] = val;
+  });
+
+  o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
+  o["요청일"] = attachStockToRequestDate_(o["요청일"], o["상품컬러코드"]);
+
+  return o;
+}
+
+function compactExistRowWithRaw_(rawRow, headerMap){
+  const o = compactExistRow_(rawRow, headerMap);
+  o["__rawText"] = rawRow.map(v => String(v ?? "").trim()).join("\t");
+  return o;
+}
 
     function compactExistRowWithRaw_(rawRow, headerMap){
       const o = compactExistRow_(rawRow, headerMap);
