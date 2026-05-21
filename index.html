@@ -1163,8 +1163,8 @@
 
             const compact = compactOrderRow_(rawRow, orderHeaderMap);
 
-            const mall = normalizeOrderNo(rawRow[idxMall]);
-            const sabang = normalizeKey(rawRow[idxSabang]);
+            const mall = normalizeOrderNo(sciToIntString_(rawRow[idxMall]));
+            const sabang = normalizeKey(sciToIntString_(rawRow[idxSabang]));
             const trk = (idxTracking != null) ? normLoose_(rawRow[idxTracking]) : "";
             const ph  = (idxPhone != null) ? normDigits_(rawRow[idxPhone]) : "";
 
@@ -2099,8 +2099,8 @@
 
     async function search(){
       const inputRaw = $("orderInput").value;
-      const qKey = normalizeKey(inputRaw);
-      const qMall = normalizeOrderNo(inputRaw);
+      const qKey = normalizeKey(sciToIntString_(inputRaw));
+      const qMall = normalizeOrderNo(sciToIntString_(inputRaw))
       const qLoose = normLoose_(inputRaw);
       const qDigits = normDigits_(inputRaw);
 
