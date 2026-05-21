@@ -1156,9 +1156,11 @@ function normalizeOrderNo(v){
           onHeader: (header)=>{
             header.forEach((h, i)=>{ if(h) orderHeaderMap.set(h, i); });
 
-            const m1 = orderHeaderMap.get("쇼핑몰 주문번호(필수)");
-            const m2 = orderHeaderMap.get("쇼핑몰 주문번호");
-            idxMall = (m1 != null) ? m1 : (m2 != null ? m2 : 2);
+            const mallHeader = Array.from(orderHeaderMap.keys()).find(h =>
+  h.replace(/\s/g, "").includes("쇼핑몰주문번호")
+);
+
+idxMall = mallHeader ? orderHeaderMap.get(mallHeader) : 2;
 
             idxTracking  = orderHeaderMap.get("운송장 번호");
             idxPhone     = orderHeaderMap.get("받는분연락처");
@@ -2110,7 +2112,7 @@ function compactExistRowWithRaw_(rawRow, headerMap){
 
     async function search(){
       const inputRaw = $("orderInput").value;
-      const qKey = normalizeKey(sciToIntString_(inputRaw));
+      const qKey = normalizeOrderNo(inputRaw);
       const qMall = normalizeOrderNo(inputRaw);
       const qLoose = normLoose_(inputRaw);
       const qDigits = normDigits_(inputRaw);
