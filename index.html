@@ -689,9 +689,12 @@
         .replace(/[\u200B-\u200D\uFEFF]/g, "")
         .trim();
     }
-    function normalizeOrderNo(v){
+function normalizeOrderNo(v){
   return normalizeKey(sciToIntString_(v))
-    .replace(/[\s\-]/g, "");
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/['"]/g, "")
+    .replace(/[\s\-]/g, "")
+    .toUpperCase();
 }
 
     function normLoose_(v){
