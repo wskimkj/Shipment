@@ -2106,7 +2106,7 @@ function normalizeOrderNo(v){
     async function search(){
       const inputRaw = $("orderInput").value;
       const qKey = normalizeKey(sciToIntString_(inputRaw));
-      cconst qMall = normalizeOrderNo(inputRaw);
+      const qMall = normalizeOrderNo(inputRaw);
       const qLoose = normLoose_(inputRaw);
       const qDigits = normDigits_(inputRaw);
 
@@ -2399,7 +2399,11 @@ document.addEventListener("keydown", async (e)=>{
 
     /* ===================== 시작 ===================== */
     initHoverTip_();
-    loadStockOnly();
+
+(async ()=>{
+  await loadStockOnly();
+  ensureOrderAndExistLoaded_();
+})();
   </script>
 </body>
 </html>
