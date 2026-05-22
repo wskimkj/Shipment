@@ -256,7 +256,8 @@
     }
 
     function normalizeKey(v){ return String(v??"").replace(/[\u200B-\u200D\uFEFF]/g,"").trim(); }
-    function normalizeOrderNo(v){ return normalizeKey(v); }
+    // ✅ 공백 제거 포함
+    function normalizeOrderNo(v){ return normalizeKey(v).replace(/\s+/g, ""); }
     function normLoose_(v){ return String(v??"").replace(/[\s\-]/g,"").trim().toLowerCase(); }
     function normDigits_(v){ return String(v??"").replace(/[^0-9]/g,""); }
 
