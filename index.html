@@ -515,13 +515,29 @@
       "옵션(수집)":"옵션(수집)","주문자명":"주문자명","비고":"비고",
     };
 
-    function compactExistRow_(rawRow,headerMap){
-      const o={}; o["__B"]=""; o["__C"]=""; o["__D"]="";
-      for(const h of OUTPUT_HEADERS) o[h]=""; o["배송수단"]="택배";
-      headerMap.forEach((colIdx,existHeader)=>{ const targetKey=EXIST_HEADER_MAP[existHeader]; if(!targetKey) return; const val=String(rawRow[colIdx]??"").trim(); if(val) o[targetKey]=val; });
-      o["재고"]=stockQtyLabel_(o["상품컬러코드"]); o["요청일"]=attachStockToRequestDate_(o["요청일"],o["상품컬러코드"]);
-      return o;
-    }
+ function compactExistRow_(rawRow, headerMap){
+  const o = {};
+  // ✅ 출고 시트에서 목적=사방넷주문번호, 전산 처리 방법=쇼핑몰주문번호
+  const sabangIdx = headerMap.get("목적") ?? -1;
+  const mallIdx = headerMap.get("전산 처리 방법") ?? -1;
+
+  o["__B"] = sabangIdx >= 0 ? String(rawRow[sabangIdx] ?? "").trim() : "";
+  o["__C"] = mallIdx >= 0 ? String(rawRow[mallIdx] ?? "").trim() : "";
+  o["__D"] = "";
+  for(const h of OUTPUT_HEADERS) o[h] = "";
+  o["배송수단"] = "택배";
+
+  headerMap.forEach((colIdx, existHeader)=>{
+    const targetKey = EXIST_HEADER_MAP[existHeader];
+    if(!targetKey) return;
+    const val = String(rawRow[colIdx] ?? "").trim();
+    if(val) o[targetKey] = val;
+  });
+
+  o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
+  o["요청일"] = attachStockToRequestDate_(o["요청일"], o["상품컬러코드"]);
+  return o;
+}
     function compactExistRowWithRaw_(rawRow,headerMap){ const o=compactExistRow_(rawRow,headerMap); o["__rawText"]=rawRow.map(v=>String(v??"").trim()).join("\t"); return o; }
 
     function parseExistAsOrderCsvStream_(csvText,sheetTag){
