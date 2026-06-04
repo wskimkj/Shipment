@@ -434,6 +434,14 @@
       o["요청일"]=attachStockToRequestDate_(o["요청일"],o["상품컬러코드"]);
       return o;
     }
+
+    function compactExistRowWithRaw_(rawRow, headerMap){
+  const o = compactExistRow_(rawRow, headerMap);
+  o["__rawText"] = rawRow.map(v => String(v ?? "").trim()).join("\t");
+  return o;
+}
+
+    
     function safeGetByHeader_(row,headerName,hm){ const map=hm||orderHeaderMap; const idx=map.get(headerName); if(idx==null||idx<0) return ""; return row[idx]??""; }
     function pushIndex_(map,key,item){ if(!key) return; if(!map.has(key)) map.set(key,[]); map.get(key).push(item); }
 
