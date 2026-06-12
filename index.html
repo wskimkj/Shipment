@@ -38,6 +38,8 @@
     .badge.low{background:var(--low-bg);border-color:var(--low-border);color:var(--low-text);}
     .badge.out{background:var(--out-bg);border-color:var(--out-border);color:var(--out-text);}
     .badge.na{background:var(--na-bg);border-color:var(--na-border);color:var(--na-text);}
+    .sep-stock-ok{font-weight:900;color:#b00020;}
+    .sep-note{font-weight:900;color:#d00000;}
     .section-header{margin-top:16px;margin-bottom:6px;padding:8px 14px;border-radius:12px;font-size:12px;font-weight:900;display:flex;align-items:center;gap:8px;}
     .section-header.order-sheet{background:linear-gradient(90deg,rgba(184,167,255,.22),rgba(255,143,188,.10));border:1px solid rgba(170,150,230,.30);color:rgba(60,40,120,.92);}
     .section-header.exist-sheet{background:linear-gradient(90deg,rgba(255,200,100,.22),rgba(255,143,188,.10));border:1px solid rgba(200,160,60,.30);color:rgba(100,60,0,.92);}
@@ -165,6 +167,7 @@
           <span id="selCount" class="badge ok" style="display:none;">선택 0건</span>
           <button class="btn" id="btnSelectAll" type="button" style="display:none;">전체 선택</button>
           <button class="btn" id="btnSelectNone" type="button" style="display:none;">선택 해제</button>
+          <button class="btn" id="btnCopySeparate" type="button" style="display:none;">분리보관 재고로 복사</button>
           <div class="miniinput" style="width:260px;">
             <span style="font-size:11px;opacity:.75;">폰트</span>
             <input id="tableFontRange" type="range" min="9" max="14" step="1" value="9" style="width:140px;">
@@ -223,13 +226,17 @@
       {key:"요청일",label:"요청일"},
       ...EXTRA_COLS.map(c=>({key:c.key,label:c.label})),
       {key:"수령인",label:"수령인"},
-      ...OUTPUT_HEADERS.filter(h=>!["요청일","수령인"].includes(h)).map(h=>({key:h,label:h}))
+      ...OUTPUT_HEADERS.filter(h=>!["요청일","수령인"].includes(h)).flatMap(h=>{
+        const base={key:h,label:h};
+        return h==="상품컬러코드"?[base,{key:"__SEP_STOCK",label:"분리보관"}]:[base];
+      })
     ];
-    const TABLE_COLS_COPY = TABLE_COLS_ALL;
+    // 복사 대상에는 실제 출고 시트에 없는 안내 컬럼(분리보관)을 제외
+    const TABLE_COLS_COPY = TABLE_COLS_ALL.filter(c=>c.key!=="__SEP_STOCK");
     const TABLE_COLS_VIEW = TABLE_COLS_ALL.filter(c=>!HIDE_IN_VIEW.has(c.label));
     const COL_WIDTH = {
       "요청일":80,"사방넷주문번호":100,"쇼핑몰 주문번호(필수)":150,"쇼핑몰":80,
-      "상품명":200,"상품컬러코드":100,"결제금액":80,"옵션(수집)":100,"운송장 번호":120,"받는분연락처":130,"_default":60
+      "상품명":200,"상품컬러코드":100,"분리보관":110,"결제금액":80,"옵션(수집)":100,"운송장 번호":120,"받는분연락처":130,"_default":60
     };
 
     const $ = (id)=>document.getElementById(id);
@@ -295,9 +302,12 @@
       else{ st.textContent=msg||"로딩 완료"; }
     }
 
-    let stockMap=new Map(), stockInfoMap=new Map();
+    let stockMap=new Map(), separateStockMap=new Map(), stockInfoMap=new Map();
     function colorNameFromStock_(c){ const code=normColorCode(c); const info=stockInfoMap.get(code); return (info?.colorName||"").trim(); }
     function stockQtyLabel_(c){ const code=normColorCode(c); if(!code) return "미등록"; if(!stockMap.has(code)) return "미등록"; return String(stockMap.get(code)); }
+    function separateStockQty_(c){ const code=normColorCode(c); if(!code||!separateStockMap.has(code)) return 0; return Number(separateStockMap.get(code))||0; }
+    function separateStockLabel_(c){ const qty=separateStockQty_(c); if(qty>=LOW_STOCK_THRESHOLD) return `분리 ${qty}개 가능`; if(qty>0) return `분리 ${qty}개`; return "-"; }
+    function canUseSeparateStock_(c){ return separateStockQty_(c)>=LOW_STOCK_THRESHOLD; }
     function stripStockTag_(s){ return String(s??"").replace(/\s*\[재고:.*?\]\s*/g," ").trim(); }
     function attachStockToRequestDate_(reqDate,colorCode){
       const base=stripStockTag_(reqDate); const code=normColorCode(colorCode);
@@ -385,7 +395,7 @@
     }
     $("dupBannerToggle")?.addEventListener("click",()=>{ const d=$("dupBannerDetail"); if(!d) return; const open=d.style.display!=="none"; d.style.display=open?"none":"flex"; $("dupBannerToggle").textContent=open?"자세히":"접기"; });
 
-    const STOCK_CACHE_KEY="SHIPMENT_STOCK_CSV_CACHE_V2", STOCK_CACHE_TTL_MS=10*60*1000;
+    const STOCK_CACHE_KEY="SHIPMENT_STOCK_CSV_CACHE_V3", STOCK_CACHE_TTL_MS=10*60*1000;
     const ORDER_CACHE_KEY="SHIPMENT_ORDER_CSV_CACHE_V1";
     const EXIST_CACHE_KEY_2025="SHIPMENT_EXIST_CSV_CACHE_2025_V1", EXIST_CACHE_KEY_2026="SHIPMENT_EXIST_CSV_CACHE_2026_V1";
     const ORDEREXIST_CACHE_TTL_MS=4*60*60*1000;
@@ -470,14 +480,15 @@
     }
 
     function buildStockFromCsvText_(csvText){
-      stockMap=new Map(); stockInfoMap=new Map();
-      let idxCode=0, idxName=5, idxColorName=8, idxQty=10;
+      stockMap=new Map(); separateStockMap=new Map(); stockInfoMap=new Map();
+      let idxCode=0, idxName=5, idxColorName=8, idxQty=10, idxSeparateQty=-1;
       parseCsvStream_(csvText,{
         onHeader:(header)=>{
           idxCode=findHeaderIdx_(header,["상품컬러코드","컬러코드","color code","sku"],0);
           idxName=findHeaderIdx_(header,["상품명","제품명","name"],5);
           idxColorName=findHeaderIdx_(header,["색상명","상품컬러명","컬러명","color"],8);
           idxQty=findHeaderIdx_(header,["재고","현재고","가용재고","수량","qty","quantity","stock"],10);
+          idxSeparateQty=findHeaderIdx_(header,["주희물류(분리)","주희물류 분리","분리보관","분리 재고","분리재고"],-1);
         },
         onRow:(r)=>{
           const code=normColorCode(r[idxCode]);
@@ -485,8 +496,10 @@
           const name=normalizeKey(r[idxName]);
           const colorName=normalizeKey(r[idxColorName]);
           const qty=toNumber(r[idxQty]);
+          const separateQty=idxSeparateQty>=0?toNumber(r[idxSeparateQty]):0;
           stockMap.set(code,qty);
-          stockInfoMap.set(code,{qty,name,colorName});
+          separateStockMap.set(code,separateQty);
+          stockInfoMap.set(code,{qty,separateQty,name,colorName});
         }
       });
     }
@@ -504,6 +517,7 @@
         o[h]=safeGetByHeader_(rawRow,h,hm)||"";
       }
       o["재고"]=stockQtyLabel_(o["상품컬러코드"]);
+      o["__SEP_STOCK"]=separateStockLabel_(o["상품컬러코드"]);
       o["요청일"]=attachStockToRequestDate_(o["요청일"],o["상품컬러코드"]);
       return o;
     }
@@ -604,7 +618,9 @@
 
   o["__B"] = sabangIdx >= 0 ? String(rawRow[sabangIdx] ?? "").trim() : "";
   o["__C"] = mallIdx >= 0 ? String(rawRow[mallIdx] ?? "").trim() : "";
-  o["__D"] = "";
+  // ✅ 출고 시트 쇼핑몰: 헤더가 쇼핑몰이 아니고 요청자/F열로 들어오는 케이스까지 대응
+  const mallNameIdx = headerMap.get("쇼핑몰") ?? headerMap.get("요청자") ?? 5;
+  o["__D"] = mallNameIdx >= 0 ? String(rawRow[mallNameIdx] ?? "").trim() : "";
   for(const h of OUTPUT_HEADERS) o[h] = "";
   o["배송수단"] = "택배";
 
@@ -616,6 +632,7 @@
   });
 
   o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
+  o["__SEP_STOCK"] = separateStockLabel_(o["상품컬러코드"]);
   o["요청일"] = attachStockToRequestDate_(o["요청일"], o["상품컬러코드"]);
   return o;
 }
@@ -750,6 +767,7 @@
       const hasRows=lastOutRows&&lastOutRows.length>0; tb.style.display=hasRows?"flex":"none";
       const showBulk=hasRows&&lastOutRows.length>1;
       $("btnSelectAll").style.display=showBulk?"":"none"; $("btnSelectNone").style.display=showBulk?"":"none";
+      const sepBtn=$("btnCopySeparate"); if(sepBtn){ const hasSep=hasRows&&lastOutRows.some(o=>canUseSeparateStock_(o["상품컬러코드"])); sepBtn.style.display=hasSep?"":"none"; }
       const checked=getCheckedIndexes_().length; const selBadge=$("selCount");
       if(selBadge){ selBadge.style.display=showBulk?"":"none"; selBadge.textContent=`선택 ${checked}건`; selBadge.className=checked?"badge ok":"badge na"; }
     }
@@ -762,9 +780,18 @@
     function moveHoverTip_(clientX,clientY){ if(!hoverTipEl||!hoverTipActive) return; const pad=14,offset=14; hoverTipEl.style.left="0px"; hoverTipEl.style.top="0px"; const rect=hoverTipEl.getBoundingClientRect(); let x=clientX+offset; let y=clientY+offset; const vw=window.innerWidth,vh=window.innerHeight; if(x+rect.width+pad>vw) x=Math.max(pad,vw-rect.width-pad); if(y+rect.height+pad>vh) y=Math.max(pad,clientY-rect.height-offset); hoverTipEl.style.left=`${x}px`; hoverTipEl.style.top=`${y}px`; }
     function hideHoverTip_(){ if(!hoverTipEl) return; hoverTipEl.classList.remove("show"); hoverTipActive=false; }
 
+    function displayCellValue_(o,c){
+      if(c.key==="__SEP_STOCK") return separateStockLabel_(o["상품컬러코드"]);
+      return o[c.key]??"";
+    }
+    function cellExtraClass_(o,c){
+      if(c.key==="__SEP_STOCK"&&canUseSeparateStock_(o["상품컬러코드"])) return " sep-stock-ok";
+      return "";
+    }
+
     function buildTableHtml_(outRows,stockTypes,wrapId){
       let html=`<table><thead><tr><th style="min-width:34px;max-width:34px;width:34px;">#</th><th style="min-width:44px;max-width:44px;width:44px;">선택</th>${TABLE_COLS_VIEW.map(c=>{ const w=COL_WIDTH[c.label]||COL_WIDTH["_default"]; return `<th style="min-width:${w}px;max-width:${w}px;">${escapeHtml(c.label)}</th>`; }).join("")}</tr></thead><tbody>`;
-      outRows.forEach((o,i)=>{ const t=stockTypes[i]||"na"; const trClass=t==="low"?"low":t==="out"?"out":t==="na"?"na":""; html+=`<tr class="${trClass}" data-idx="${i}"><td class="copy" data-copy="${i+1}">${i+1}</td><td class="chkcell"><input type="checkbox" class="rowChk" data-idx="${i}" data-wrap="${wrapId}"></td>${TABLE_COLS_VIEW.map(c=>{ const v=o[c.key]??""; const w=COL_WIDTH[c.label]||COL_WIDTH["_default"]; const raw=String(v??""); return `<td class="copy" style="min-width:${w}px;max-width:${w}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" data-copy="${escapeHtml(raw)}">${escapeHtml(raw)}</td>`; }).join("")}</tr>`; });
+      outRows.forEach((o,i)=>{ const t=stockTypes[i]||"na"; const trClass=t==="low"?"low":t==="out"?"out":t==="na"?"na":""; html+=`<tr class="${trClass}" data-idx="${i}"><td class="copy" data-copy="${i+1}">${i+1}</td><td class="chkcell"><input type="checkbox" class="rowChk" data-idx="${i}" data-wrap="${wrapId}"></td>${TABLE_COLS_VIEW.map(c=>{ const v=displayCellValue_(o,c); const w=COL_WIDTH[c.label]||COL_WIDTH["_default"]; const raw=String(v??""); return `<td class="copy${cellExtraClass_(o,c)}" style="min-width:${w}px;max-width:${w}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" data-copy="${escapeHtml(raw)}">${escapeHtml(raw)}</td>`; }).join("")}</tr>`; });
       html+=`</tbody></table>`; return html;
     }
 
@@ -796,8 +823,17 @@
       });
     }
 
-    function buildTSV(outRows){ const lines=[]; outRows.forEach(o=>{ const vals=TABLE_COLS_COPY.map(c=>{ const v=(c.key==="운송장 번호")?"":String(o[c.key]??""); return v.replace(/\t/g," ").replace(/\r?\n/g," "); }); lines.push(vals.join("\t")); }); return lines.join("\n"); }
-    function buildHTMLTable(outRows){ const tdStyle="border:1px solid #eee;padding:6px 8px;text-align:center;vertical-align:middle;"; const tbody=outRows.map(o=>{ const tds=TABLE_COLS_COPY.map(c=>{ const v=(c.key==="운송장 번호")?"":String(o[c.key]??""); return `<td style="${tdStyle}">${escapeHtml(v)}</td>`; }).join(""); return `<tr>${tds}</tr>`; }).join(""); return `<table style="border-collapse:collapse;"><tbody>${tbody}</tbody></table>`.trim(); }
+    function copyCellValue_(o,c){
+      if(c.key==="운송장 번호") return "";
+      if(c.key==="비고"&&o.__USE_SEPARATE_STOCK){
+        const base=String(o[c.key]??"").trim();
+        const note="분리보관 재고 활용";
+        return base&&base!==note?`${base} ${note}`:note;
+      }
+      return String(o[c.key]??"");
+    }
+    function buildTSV(outRows){ const lines=[]; outRows.forEach(o=>{ const vals=TABLE_COLS_COPY.map(c=>{ const v=copyCellValue_(o,c); return v.replace(/\t/g," ").replace(/\r?\n/g," "); }); lines.push(vals.join("\t")); }); return lines.join("\n"); }
+    function buildHTMLTable(outRows){ const tdStyle="border:1px solid #eee;padding:6px 8px;text-align:center;vertical-align:middle;"; const tbody=outRows.map(o=>{ const tds=TABLE_COLS_COPY.map(c=>{ const v=copyCellValue_(o,c); const extra=(c.key==="비고"&&o.__USE_SEPARATE_STOCK)?"color:#d00000;font-weight:900;":""; return `<td style="${tdStyle}${extra}">${escapeHtml(v)}</td>`; }).join(""); return `<tr>${tds}</tr>`; }).join(""); return `<table style="border-collapse:collapse;"><tbody>${tbody}</tbody></table>`.trim(); }
 
     async function writeClipboardRows_(rowsToCopy){
       const tsv=buildTSV(rowsToCopy); const html=buildHTMLTable(rowsToCopy);
@@ -819,7 +855,31 @@
       const rowsToCopy=idxs.map(i=>lastOutRows[i]).filter(Boolean); await writeClipboardRows_(rowsToCopy);
     }
 
-    function buildOutManual(colorCode,qty){ const o={}; for(const c of EXTRA_COLS) o[c.key]=""; for(const h of OUTPUT_HEADERS) o[h]=""; o["배송수단"]="택배"; o["운송장 번호"]=""; o["상품컬러코드"]=colorCode||""; o["수량"]=qty||""; o["상품명"]=nameFromStock_(o["상품컬러코드"]); o["재고"]=stockQtyLabel_(o["상품컬러코드"]); o["옵션(수집)"]=colorNameFromStock_(o["상품컬러코드"]); return o; }
+    function getCopyIndexesWithDragFallback_(){
+      let idxs=getCheckedIndexes_();
+      if(!idxs.length){ const dragIdxs=getSelectedRowIndexesByDrag_(); if(dragIdxs.length) idxs=dragIdxs; }
+      if(!idxs.length&&lastOutRows) idxs=lastOutRows.map((_,i)=>i);
+      return idxs;
+    }
+    function markRowsForSeparateStockCopy_(rows){
+      return rows.map(r=>{
+        const o={...r,__USE_SEPARATE_STOCK:true};
+        o["비고"] = copyCellValue_(o,{key:"비고",label:"비고"});
+        return o;
+      });
+    }
+    async function copyWithSeparateStock_(){
+      if(!lastOutRows||lastOutRows.length===0){ showToast("복사할 결과 없음"); return; }
+      const idxs=getCopyIndexesWithDragFallback_();
+      const rows=idxs.map(i=>lastOutRows[i]).filter(Boolean);
+      if(!rows.length){ showToast("복사할 결과 없음"); return; }
+      const blocked=rows.filter(o=>!canUseSeparateStock_(o["상품컬러코드"]));
+      if(blocked.length){ showToast(`분리보관 재고 10개 이상 없는 행 ${blocked.length}건`); return; }
+      await writeClipboardRows_(markRowsForSeparateStockCopy_(rows));
+      showToast(`분리보관 재고로 복사됨 (${rows.length}건)`);
+    }
+
+    function buildOutManual(colorCode,qty){ const o={}; for(const c of EXTRA_COLS) o[c.key]=""; for(const h of OUTPUT_HEADERS) o[h]=""; o["배송수단"]="택배"; o["운송장 번호"]=""; o["상품컬러코드"]=colorCode||""; o["수량"]=qty||""; o["상품명"]=nameFromStock_(o["상품컬러코드"]); o["재고"]=stockQtyLabel_(o["상품컬러코드"]); o["__SEP_STOCK"]=separateStockLabel_(o["상품컬러코드"]); o["옵션(수집)"]=colorNameFromStock_(o["상품컬러코드"]); return o; }
     function applyManual(){ const color=normalizeKey($("manualColor").value); const qty=normalizeKey($("manualQty").value); if(!color){ showToast(""); return; } if(!stockLoaded){ showToast("재고 로딩 중…"); return; } const out=buildOutManual(color,qty); const st=stockStatusByColorCode(out["상품컬러코드"]); lastSource="manual"; originalOutRows=JSON.parse(JSON.stringify([out])); $("status").textContent="수동 입력 결과: 1건"; $("noResultWrap").style.display="none"; $("existResultSection").style.display="none"; renderOrderTable_([out],[st.type]); }
     function applyChange(){
       if(!lastOutRows||lastOutRows.length===0){ showToast("변경할 검색 결과가 없습니다"); return; }
@@ -827,7 +887,7 @@
       if(!newColor){ showToast("변경 컬러코드를 입력해주세요"); return; }
       let targets=[]; if(lastOutRows.length>1){ targets=getCheckedIndexes_(); if(targets.length===0){ showToast("행을 체크해주세요"); return; } } else{ targets=[0]; }
       const targetSet=new Set(targets);
-      const updated=lastOutRows.map((o,idx)=>{ const copy={...o}; if(targetSet.has(idx)){ copy["상품컬러코드"]=newColor; if(newQty!=="") copy["수량"]=newQty; copy["상품명"]=nameFromStock_(newColor); copy["요청일"]=attachStockToRequestDate_(copy["요청일"],newColor); copy["옵션(수집)"]=colorNameFromStock_(newColor); } return copy; });
+      const updated=lastOutRows.map((o,idx)=>{ const copy={...o}; if(targetSet.has(idx)){ copy["상품컬러코드"]=newColor; if(newQty!=="") copy["수량"]=newQty; copy["상품명"]=nameFromStock_(newColor); copy["요청일"]=attachStockToRequestDate_(copy["요청일"],newColor); copy["옵션(수집)"]=colorNameFromStock_(newColor); copy["__SEP_STOCK"]=separateStockLabel_(newColor); } return copy; });
       const types=updated.map(o=>stockStatusByColorCode(o["상품컬러코드"]).type); renderOrderTable_(updated,types); showToast(`선택 ${targets.length}건에만 적용됨`);
     }
     function resetChange(){ if(!originalOutRows||originalOutRows.length===0){ showToast("되돌릴 데이터가 없습니다"); return; } const restored=JSON.parse(JSON.stringify(originalOutRows)); const types=restored.map(o=>stockStatusByColorCode(o["상품컬러코드"]).type); renderOrderTable_(restored,types); showToast("변경 취소됨"); }
@@ -907,6 +967,7 @@
     $("btnManualApply").addEventListener("click",applyManual);
     $("btnChangeApply").addEventListener("click",applyChange);
     $("btnChangeReset").addEventListener("click",resetChange);
+    $("btnCopySeparate")?.addEventListener("click",copyWithSeparateStock_);
 
     initHoverTip_();
     loadStockOnly();
