@@ -249,10 +249,18 @@
       try{ const res=await fetch(url,{signal:controller.signal,cache:"no-store"}); if(!res.ok) throw new Error("HTTP "+res.status); return await res.text(); }
       finally{ clearTimeout(t); }
     }
-    async function fetchCsvSmart(baseUrl,timeoutMs=12000){
-      const t1=await fetchText(baseUrl,timeoutMs).catch(()=>""); if(!looksLikeBadCsv(t1)) return t1;
-      const t2=await fetchText(withCacheBust(baseUrl),timeoutMs).catch(()=>""); if(!looksLikeBadCsv(t2)) return t2;
-      return t2||t1;
+    async function fetchCsvSmart(baseUrl,timeoutMs=12000,options={}){
+      // 재고처럼 최신성이 중요한 시트는 캐시버스터 URL을 먼저 호출
+      // Google CSV/export가 정상 응답이어도 내부 캐시가 남는 경우가 있어 기본 URL만 믿지 않음
+      const preferFresh=!!options.preferFresh;
+      const urls=preferFresh?[withCacheBust(baseUrl),baseUrl]:[baseUrl,withCacheBust(baseUrl)];
+      let lastText="";
+      for(const url of urls){
+        const txt=await fetchText(url,timeoutMs).catch(()=>"");
+        if(txt) lastText=txt;
+        if(!looksLikeBadCsv(txt)) return txt;
+      }
+      return lastText;
     }
 
     function normalizeKey(v){ return String(v??"").replace(/[\u200B-\u200D\uFEFF]/g,"").trim(); }
@@ -377,7 +385,7 @@
     }
     $("dupBannerToggle")?.addEventListener("click",()=>{ const d=$("dupBannerDetail"); if(!d) return; const open=d.style.display!=="none"; d.style.display=open?"none":"flex"; $("dupBannerToggle").textContent=open?"자세히":"접기"; });
 
-    const STOCK_CACHE_KEY="SHIPMENT_STOCK_CSV_CACHE_V1", STOCK_CACHE_TTL_MS=4*60*60*1000;
+    const STOCK_CACHE_KEY="SHIPMENT_STOCK_CSV_CACHE_V2", STOCK_CACHE_TTL_MS=10*60*1000;
     const ORDER_CACHE_KEY="SHIPMENT_ORDER_CSV_CACHE_V1";
     const EXIST_CACHE_KEY_2025="SHIPMENT_EXIST_CSV_CACHE_2025_V1", EXIST_CACHE_KEY_2026="SHIPMENT_EXIST_CSV_CACHE_2026_V1";
     const ORDEREXIST_CACHE_TTL_MS=4*60*60*1000;
@@ -401,21 +409,86 @@
       });
     }
 
-    let stockLoaded=false;
+    let stockLoaded=false, stockLoadingPromise=null;
     async function loadStockOnly(){
-      setLoadingUI_(true,"재고 로딩 중…"); clearStockUI(); hideExistPanel(); hideDupBanner_();
-      setPanel("manual",false); setPanel("change",false); copyBlocked_=true; wireColorSelect_();
-      try{
-        const cached=loadStockCache_();
-        if(cached){ buildStockFromCsvText_(cached); stockLoaded=true; rebuildColorSelectOptions_(); setLoadingUI_(false,"재고 로딩 완료 (캐시)"); }
-        const stockCsv=await fetchCsvSmart(STOCK_CSV_BASE);
-        if(!looksLikeBadCsv(stockCsv)){ saveStockCache_(stockCsv); buildStockFromCsvText_(stockCsv); stockLoaded=true; rebuildColorSelectOptions_(); setLoadingUI_(false,"재고 로딩 완료"); }
-        else{ if(!stockLoaded) setLoadingUI_(false,"재고 로드 실패: 시트 공개(보기 가능) 확인"); }
-      }catch(e){ console.error(e); if(!stockLoaded) setLoadingUI_(false,"재고 로드 실패: 시트 공개(보기 가능) 확인"); }
+      if(stockLoadingPromise) return stockLoadingPromise;
+      stockLoadingPromise=(async()=>{
+        setLoadingUI_(true,"재고 최신 데이터 불러오는 중…"); clearStockUI(); hideExistPanel(); hideDupBanner_();
+        setPanel("manual",false); setPanel("change",false); copyBlocked_=true; wireColorSelect_();
+        try{
+          // 최신 재고가 중요하므로 네트워크 최신 CSV를 먼저 반영하고, 실패할 때만 캐시 사용
+          const stockCsv=await fetchCsvSmart(STOCK_CSV_BASE,12000,{preferFresh:true});
+          if(!looksLikeBadCsv(stockCsv)){
+            saveStockCache_(stockCsv);
+            buildStockFromCsvText_(stockCsv);
+            stockLoaded=true;
+            rebuildColorSelectOptions_();
+            setLoadingUI_(false,`재고 로딩 완료 (${stockMap.size}개)`);
+            return;
+          }
+          const cached=loadStockCache_();
+          if(cached){
+            buildStockFromCsvText_(cached);
+            stockLoaded=true;
+            rebuildColorSelectOptions_();
+            setLoadingUI_(false,`재고 로딩 완료 (캐시 · ${stockMap.size}개)`);
+            return;
+          }
+          setLoadingUI_(false,"재고 로드 실패: 시트 공개(보기 가능) 확인");
+        }catch(e){
+          console.error(e);
+          const cached=loadStockCache_();
+          if(cached){
+            buildStockFromCsvText_(cached);
+            stockLoaded=true;
+            rebuildColorSelectOptions_();
+            setLoadingUI_(false,`재고 로딩 완료 (캐시 · ${stockMap.size}개)`);
+          }else{
+            setLoadingUI_(false,"재고 로드 실패: 시트 공개(보기 가능) 확인");
+          }
+        }finally{
+          stockLoadingPromise=null;
+        }
+      })();
+      return stockLoadingPromise;
     }
+
+    async function ensureStockLoaded_(){
+      if(stockLoaded) return;
+      await loadStockOnly();
+    }
+
+    function findHeaderIdx_(header,candidates,fallbackIdx){
+      const norm=(s)=>normalizeKey(s).replace(/[\s_()（）\[\]{}·:：-]/g,"").toLowerCase();
+      const normalized=header.map(h=>norm(h));
+      for(const c of candidates){
+        const target=norm(c);
+        const idx=normalized.findIndex(h=>h===target||h.includes(target)||target.includes(h));
+        if(idx>=0) return idx;
+      }
+      return fallbackIdx;
+    }
+
     function buildStockFromCsvText_(csvText){
       stockMap=new Map(); stockInfoMap=new Map();
-      parseCsvStream_(csvText,{ onHeader:()=>{}, onRow:(r)=>{ const code=normColorCode(r[0]); if(!code) return; const name=normalizeKey(r[5]); const colorName=normalizeKey(r[8]); const qty=toNumber(r[10]); stockMap.set(code,qty); stockInfoMap.set(code,{qty,name,colorName}); } });
+      let idxCode=0, idxName=5, idxColorName=8, idxQty=10;
+      parseCsvStream_(csvText,{
+        onHeader:(header)=>{
+          idxCode=findHeaderIdx_(header,["상품컬러코드","컬러코드","color code","sku"],0);
+          idxName=findHeaderIdx_(header,["상품명","제품명","name"],5);
+          idxColorName=findHeaderIdx_(header,["색상명","상품컬러명","컬러명","color"],8);
+          idxQty=findHeaderIdx_(header,["재고","현재고","가용재고","수량","qty","quantity","stock"],10);
+        },
+        onRow:(r)=>{
+          const code=normColorCode(r[idxCode]);
+          if(!code) return;
+          const name=normalizeKey(r[idxName]);
+          const colorName=normalizeKey(r[idxColorName]);
+          const qty=toNumber(r[idxQty]);
+          stockMap.set(code,qty);
+          stockInfoMap.set(code,{qty,name,colorName});
+        }
+      });
     }
 
     let orderLoaded=false, orderHeaderMap=new Map();
@@ -779,7 +852,11 @@
 
       clearResult_();
       if(!qKey){ $("noResultWrap").style.display="block"; $("tableWrapFallback").innerHTML=`<div class="no-data">검색어를 입력해주세요.</div>`; updateToolbar_(); hideHoverTip_(); return; }
-      if(!stockLoaded){ $("status").textContent="재고 로딩 중…"; return; }
+      if(!stockLoaded){
+        try{ await ensureStockLoaded_(); }
+        catch{ $("status").textContent="재고 로드 실패"; return; }
+      }
+      if(!stockLoaded){ $("status").textContent="재고 로드 실패"; return; }
       if(!orderLoaded||!existLoaded){
         try{ await ensureOrderAndExistLoaded_(); }
         catch{ $("status").textContent="발주/출고 로드 실패 (수동 입력 가능)"; setPanel("manual",true); $("noResultWrap").style.display="block"; $("tableWrapFallback").innerHTML=`<div class="no-data">발주서/출고 시트를 불러오지 못했습니다.<br/>아래에서 <strong>상품컬러코드</strong>를 입력하면 재고 확인 후 결과 테이블을 만들 수 있어요.</div>`; updateToolbar_(); hideHoverTip_(); return; }
