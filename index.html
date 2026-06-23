@@ -16,6 +16,7 @@
       --na-bg:rgba(120,120,140,.10); --na-border:rgba(120,120,140,.35); --na-text:rgba(80,80,95,.95);
       --ok-bg:rgba(184,167,255,.14); --ok-border:rgba(170,150,230,.35); --ok-text:rgba(47,42,58,.92);
       --pink:#ff8fbc; --table-font:9px; --row-pad-y:7px; --row-pad-x:8px; --mini-pad-x:6px;
+      --warn-bg:rgba(255,160,0,.13); --warn-border:rgba(255,160,0,.40); --warn-text:rgba(120,70,0,.95);
     }
     *{box-sizing:border-box;font-family:"Pretendard",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
     body{margin:0;min-height:100vh;color:var(--text);background:radial-gradient(900px 520px at 20% 18%,rgba(255,143,188,.25),transparent 60%),radial-gradient(900px 520px at 82% 24%,rgba(184,167,255,.20),transparent 58%),linear-gradient(180deg,var(--bg1),var(--bg2));}
@@ -38,6 +39,7 @@
     .badge.low{background:var(--low-bg);border-color:var(--low-border);color:var(--low-text);}
     .badge.out{background:var(--out-bg);border-color:var(--out-border);color:var(--out-text);}
     .badge.na{background:var(--na-bg);border-color:var(--na-border);color:var(--na-text);}
+    .badge.warn{background:var(--warn-bg);border-color:var(--warn-border);color:var(--warn-text);}
     .sep-stock-ok{font-weight:900;color:#b00020;}
     .sep-note{font-weight:900;color:#d00000;}
     .section-header{margin-top:16px;margin-bottom:6px;padding:8px 14px;border-radius:12px;font-size:12px;font-weight:900;display:flex;align-items:center;gap:8px;}
@@ -87,6 +89,13 @@
     .dupCard{border-radius:14px;background:rgba(255,255,255,.78);border:1px solid rgba(255,35,35,.22);padding:10px 12px;display:flex;flex-direction:column;gap:4px;}
     .dupLine1{font-weight:900;font-size:12.5px;color:rgba(47,42,58,.94);}
     .dupLine2{font-weight:800;font-size:11.5px;color:rgba(110,106,130,.88);display:flex;gap:10px;flex-wrap:wrap;}
+
+    /* ✅ 주희물류 없음 경고 배너 */
+    .noWarehouseBanner{margin-top:12px;border-radius:18px;border:1px solid var(--warn-border);background:linear-gradient(90deg,var(--warn-bg),rgba(255,143,188,.07));padding:12px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+    .noWarehouseIcon{width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(255,160,0,.20);border:1px solid var(--warn-border);font-size:16px;flex-shrink:0;}
+    .noWarehouseText{font-size:12px;font-weight:800;color:var(--warn-text);}
+    .noWarehouseTitle{font-size:13px;font-weight:900;color:var(--warn-text);margin-bottom:2px;}
+
     #tableWrap th{position:sticky;user-select:none;}
     #tableWrap th .col-resizer{position:absolute;top:0;right:-4px;width:8px;height:100%;cursor:col-resize;z-index:5;}
     #tableWrap th.resizing{cursor:col-resize;}
@@ -120,6 +129,16 @@
         <div class="meta">
           <span id="status">로딩 중…</span><span id="stat2"></span><span id="stockSummary"></span><span id="copyGateMsg"></span>
         </div>
+
+        <!-- ✅ 주희물류 재고 없음 경고 배너 -->
+        <div class="noWarehouseBanner" id="noWarehouseBanner" style="display:none;">
+          <div class="noWarehouseIcon">⚠️</div>
+          <div>
+            <div class="noWarehouseTitle">주희물류 재고 없음</div>
+            <div class="noWarehouseText" id="noWarehouseBannerText">재고 시트에서 이 상품컬러코드의 주희물류 재고를 찾을 수 없습니다. 다른 창고에만 재고가 있거나, 등록되지 않은 상품일 수 있어요.</div>
+          </div>
+        </div>
+
         <div class="dupBanner" id="dupBanner" style="display:none;">
           <div class="dupBannerLeft">
             <div class="dupIcon">🔴</div>
@@ -202,6 +221,10 @@
     const EXIST_SHEET_URL_VIEW_2026 = "https://docs.google.com/spreadsheets/d/1LPy69E2yPTaSwxFAYrX6qV0BZx1tW0YdonLRNqeo5Vc/edit?gid=883501265#gid=883501265";
     const EXIST_CSV_BASE_2026 = "https://docs.google.com/spreadsheets/d/1LPy69E2yPTaSwxFAYrX6qV0BZx1tW0YdonLRNqeo5Vc/export?format=csv&gid=883501265";
 
+    // ✅ 주희물류 창고명 상수
+    const WAREHOUSE_JUHI = "주희물류";
+    const WAREHOUSE_JUHI_SEP = "주희물류(분리보관)";
+
     document.getElementById("orderLink").href = ORDER_SHEET_URL_VIEW;
     document.getElementById("stockLink").href = STOCK_SHEET_URL_VIEW;
     document.getElementById("existLink").href = EXIST_SHEET_URL_VIEW_2026;
@@ -231,7 +254,6 @@
         return h==="상품컬러코드"?[base,{key:"__SEP_STOCK",label:"분리보관"}]:[base];
       })
     ];
-    // 복사 대상에는 실제 출고 시트에 없는 안내 컬럼(분리보관)을 제외
     const TABLE_COLS_COPY = TABLE_COLS_ALL.filter(c=>c.key!=="__SEP_STOCK");
     const TABLE_COLS_VIEW = TABLE_COLS_ALL.filter(c=>!HIDE_IN_VIEW.has(c.label));
     const COL_WIDTH = {
@@ -257,8 +279,6 @@
       finally{ clearTimeout(t); }
     }
     async function fetchCsvSmart(baseUrl,timeoutMs=12000,options={}){
-      // 재고처럼 최신성이 중요한 시트는 캐시버스터 URL을 먼저 호출
-      // Google CSV/export가 정상 응답이어도 내부 캐시가 남는 경우가 있어 기본 URL만 믿지 않음
       const preferFresh=!!options.preferFresh;
       const urls=preferFresh?[withCacheBust(baseUrl),baseUrl]:[baseUrl,withCacheBust(baseUrl)];
       let lastText="";
@@ -271,12 +291,10 @@
     }
 
     function normalizeKey(v){ return String(v??"").replace(/[\u200B-\u200D\uFEFF]/g,"").trim(); }
-    // ✅ 공백 제거 포함
     function normalizeOrderNo(v){ return normalizeKey(v).replace(/\s+/g, ""); }
     function normLoose_(v){ return String(v??"").replace(/[\s\-]/g,"").trim().toLowerCase(); }
     function normDigits_(v){ return String(v??"").replace(/[^0-9]/g,""); }
 
-    // ✅ 핵심 수정: 지수 표기법 → 정수 문자열 변환
     function sciToIntString_(s){
       s=String(s??"").trim(); if(!/[eE]/.test(s)) return s;
       const m=s.match(/^([+-]?\d+(?:\.\d+)?)[eE]([+-]?\d+)$/); if(!m) return s;
@@ -302,9 +320,19 @@
       else{ st.textContent=msg||"로딩 완료"; }
     }
 
-    let stockMap=new Map(), separateStockMap=new Map(), stockInfoMap=new Map();
+    // ✅ stockMap: 주희물류 재고만
+    // ✅ separateStockMap: 주희물류(분리보관) 재고만
+    // ✅ stockInfoMap: 상품명/색상명 정보 (주희물류 or 분리보관 중 발견된 첫 행 기준)
+    // ✅ noWarehouseSet: 주희물류 행이 아예 없는 코드 추적용
+    let stockMap=new Map(), separateStockMap=new Map(), stockInfoMap=new Map(), noWarehouseSet=new Set();
+
     function colorNameFromStock_(c){ const code=normColorCode(c); const info=stockInfoMap.get(code); return (info?.colorName||"").trim(); }
-    function stockQtyLabel_(c){ const code=normColorCode(c); if(!code) return "미등록"; if(!stockMap.has(code)) return "미등록"; return String(stockMap.get(code)); }
+    function stockQtyLabel_(c){
+      const code=normColorCode(c);
+      if(!code) return "미등록";
+      if(!stockMap.has(code)) return "미등록";
+      return String(stockMap.get(code));
+    }
     function separateStockQty_(c){ const code=normColorCode(c); if(!code||!separateStockMap.has(code)) return 0; return Number(separateStockMap.get(code))||0; }
     function separateStockLabel_(c){ const qty=separateStockQty_(c); if(qty>=LOW_STOCK_THRESHOLD) return `분리 ${qty}개 가능`; if(qty>0) return `분리 ${qty}개`; return "-"; }
     function canUseSeparateStock_(c){ return separateStockQty_(c)>=LOW_STOCK_THRESHOLD; }
@@ -328,6 +356,23 @@
       if(qty<LOW_STOCK_THRESHOLD) return{type:"low",label:`재고 ${qty} (${LOW_STOCK_THRESHOLD} 미만)`,qty};
       return{type:"ok",label:`재고 ${qty}`,qty};
     }
+
+    // ✅ 주희물류 없음 배너 표시/숨기기
+    function showNoWarehouseBanner_(colorCodes){
+      const banner=$("noWarehouseBanner");
+      if(!banner) return;
+      if(!colorCodes||colorCodes.length===0){ banner.style.display="none"; return; }
+      // 주희물류 재고가 없는 코드만 필터
+      const missing=colorCodes.filter(c=>{ const code=normColorCode(c); return code&&!stockMap.has(code); });
+      if(missing.length===0){ banner.style.display="none"; return; }
+      const textEl=$("noWarehouseBannerText");
+      if(textEl){
+        const codeList=missing.slice(0,5).join(", ")+(missing.length>5?` 외 ${missing.length-5}건`:"");
+        textEl.textContent=`재고 시트에서 주희물류 창고 재고를 찾을 수 없는 상품컬러코드: ${codeList}. 다른 창고에만 재고가 있거나, 시트에 미등록된 상품일 수 있어요.`;
+      }
+      banner.style.display="flex";
+    }
+    function hideNoWarehouseBanner_(){ const b=$("noWarehouseBanner"); if(b) b.style.display="none"; }
 
     let colorSelectWired=false;
     function getAllowedProductCodesForDropdown_(){
@@ -395,7 +440,7 @@
     }
     $("dupBannerToggle")?.addEventListener("click",()=>{ const d=$("dupBannerDetail"); if(!d) return; const open=d.style.display!=="none"; d.style.display=open?"none":"flex"; $("dupBannerToggle").textContent=open?"자세히":"접기"; });
 
-    const STOCK_CACHE_KEY="SHIPMENT_STOCK_CSV_CACHE_V3", STOCK_CACHE_TTL_MS=10*60*1000;
+    const STOCK_CACHE_KEY="SHIPMENT_STOCK_CSV_CACHE_V4", STOCK_CACHE_TTL_MS=10*60*1000;
     const ORDER_CACHE_KEY="SHIPMENT_ORDER_CSV_CACHE_V1";
     const EXIST_CACHE_KEY_2025="SHIPMENT_EXIST_CSV_CACHE_2025_V1", EXIST_CACHE_KEY_2026="SHIPMENT_EXIST_CSV_CACHE_2026_V1";
     const ORDEREXIST_CACHE_TTL_MS=4*60*60*1000;
@@ -426,14 +471,13 @@
         setLoadingUI_(true,"재고 최신 데이터 불러오는 중…"); clearStockUI(); hideExistPanel(); hideDupBanner_();
         setPanel("manual",false); setPanel("change",false); copyBlocked_=true; wireColorSelect_();
         try{
-          // 최신 재고가 중요하므로 네트워크 최신 CSV를 먼저 반영하고, 실패할 때만 캐시 사용
           const stockCsv=await fetchCsvSmart(STOCK_CSV_BASE,12000,{preferFresh:true});
           if(!looksLikeBadCsv(stockCsv)){
             saveStockCache_(stockCsv);
             buildStockFromCsvText_(stockCsv);
             stockLoaded=true;
             rebuildColorSelectOptions_();
-            setLoadingUI_(false,`재고 로딩 완료 (${stockMap.size}개)`);
+            setLoadingUI_(false,`재고 로딩 완료 (주희물류 ${stockMap.size}개 항목)`);
             return;
           }
           const cached=loadStockCache_();
@@ -441,7 +485,7 @@
             buildStockFromCsvText_(cached);
             stockLoaded=true;
             rebuildColorSelectOptions_();
-            setLoadingUI_(false,`재고 로딩 완료 (캐시 · ${stockMap.size}개)`);
+            setLoadingUI_(false,`재고 로딩 완료 (캐시 · 주희물류 ${stockMap.size}개 항목)`);
             return;
           }
           setLoadingUI_(false,"재고 로드 실패: 시트 공개(보기 가능) 확인");
@@ -452,7 +496,7 @@
             buildStockFromCsvText_(cached);
             stockLoaded=true;
             rebuildColorSelectOptions_();
-            setLoadingUI_(false,`재고 로딩 완료 (캐시 · ${stockMap.size}개)`);
+            setLoadingUI_(false,`재고 로딩 완료 (캐시 · 주희물류 ${stockMap.size}개 항목)`);
           }else{
             setLoadingUI_(false,"재고 로드 실패: 시트 공개(보기 가능) 확인");
           }
@@ -479,27 +523,61 @@
       return fallbackIdx;
     }
 
+    // ✅ 핵심 수정: 창고명(C열) 기준으로 주희물류 / 주희물류(분리보관)만 집계
     function buildStockFromCsvText_(csvText){
-      stockMap=new Map(); separateStockMap=new Map(); stockInfoMap=new Map();
-      let idxCode=0, idxName=5, idxColorName=8, idxQty=10, idxSeparateQty=-1;
+      stockMap=new Map(); separateStockMap=new Map(); stockInfoMap=new Map(); noWarehouseSet=new Set();
+
+      // allCodesInSheet: 시트에 등록은 됐지만 주희물류 행이 없는 코드 파악용
+      const allCodesInSheet=new Set();
+
+      let idxCode=0, idxWarehouse=2, idxName=5, idxColorName=8, idxQty=10;
+
       parseCsvStream_(csvText,{
         onHeader:(header)=>{
-          idxCode=findHeaderIdx_(header,["상품컬러코드","컬러코드","color code","sku"],0);
-          idxName=findHeaderIdx_(header,["상품명","제품명","name"],5);
-          idxColorName=findHeaderIdx_(header,["색상명","상품컬러명","컬러명","color"],8);
-          idxQty=findHeaderIdx_(header,["재고","현재고","가용재고","수량","qty","quantity","stock"],10);
-          idxSeparateQty=findHeaderIdx_(header,["주희물류(분리)","주희물류 분리","분리보관","분리 재고","분리재고"],-1);
+          idxCode      = findHeaderIdx_(header,["상품코드칼라x","상품코드칼라","skucode","sku"],0);
+          idxWarehouse = findHeaderIdx_(header,["창고명","창고"],2);
+          idxName      = findHeaderIdx_(header,["상품명","제품명","name"],5);
+          idxColorName = findHeaderIdx_(header,["칼라명","색상명","컬러명","칼라","color"],8);
+          idxQty       = findHeaderIdx_(header,["재고","현재고","가용재고","수량","qty","quantity","stock"],10);
         },
         onRow:(r)=>{
           const code=normColorCode(r[idxCode]);
           if(!code) return;
+
+          const warehouse=normalizeKey(r[idxWarehouse]);
+          const qty=toNumber(r[idxQty]);
           const name=normalizeKey(r[idxName]);
           const colorName=normalizeKey(r[idxColorName]);
-          const qty=toNumber(r[idxQty]);
-          const separateQty=idxSeparateQty>=0?toNumber(r[idxSeparateQty]):0;
-          stockMap.set(code,qty);
-          separateStockMap.set(code,separateQty);
-          stockInfoMap.set(code,{qty,separateQty,name,colorName});
+
+          // 시트에 등록된 전체 코드 추적
+          allCodesInSheet.add(code);
+
+          if(warehouse===WAREHOUSE_JUHI_SEP){
+            // 주희물류(분리보관) → separateStockMap에 누적
+            separateStockMap.set(code,(separateStockMap.get(code)||0)+qty);
+            // 이름 정보가 없으면 여기서라도 세팅
+            if(!stockInfoMap.has(code)){
+              stockInfoMap.set(code,{qty:0,separateQty:qty,name,colorName});
+            }
+          } else if(warehouse===WAREHOUSE_JUHI){
+            // 주희물류 → stockMap에 누적
+            const newQty=(stockMap.get(code)||0)+qty;
+            stockMap.set(code,newQty);
+            // stockInfoMap: 주희물류 행 기준으로 덮어씀 (가장 정확한 정보)
+            stockInfoMap.set(code,{
+              qty:newQty,
+              separateQty:separateStockMap.get(code)||0,
+              name,
+              colorName
+            });
+          }
+          // 그 외 창고는 무시
+        },
+        onDone:()=>{
+          // 시트에는 있지만 주희물류 행이 없는 코드 파악
+          allCodesInSheet.forEach(code=>{
+            if(!stockMap.has(code)) noWarehouseSet.add(code);
+          });
         }
       });
     }
@@ -522,13 +600,6 @@
       return o;
     }
 
-    function compactExistRowWithRaw_(rawRow, headerMap){
-  const o = compactExistRow_(rawRow, headerMap);
-  o["__rawText"] = rawRow.map(v => String(v ?? "").trim()).join("\t");
-  return o;
-}
-
-    
     function safeGetByHeader_(row,headerName,hm){ const map=hm||orderHeaderMap; const idx=map.get(headerName); if(idx==null||idx<0) return ""; return row[idx]??""; }
     function pushIndex_(map,key,item){ if(!key) return; if(!map.has(key)) map.set(key,[]); map.get(key).push(item); }
 
@@ -536,7 +607,7 @@
       return new Promise((resolve,reject)=>{
         orderIndexByMall=new Map(); orderIndexBySabang=new Map(); orderIndexByTracking=new Map(); orderIndexByPhone=new Map();
         orderAllForRecipientScan=[]; orderHeaderMap=new Map();
-        let idxMall=2,idxSabang=1,idxTracking=null,idxPhone=null,idxRecipient=null;
+        let idxMall=2,idxTracking=null,idxPhone=null,idxRecipient=null;
         parseCsvStream_(csvText,{
           onHeader:(header)=>{
             header.forEach((h,i)=>{ if(h) orderHeaderMap.set(h,i); });
@@ -547,9 +618,8 @@
           onRow:(rawRow)=>{
             if(!rawRow||rawRow.length<3) return;
             const compact=compactOrderRow_(rawRow,orderHeaderMap);
-            // ✅ 지수표기 주문번호 정상 처리
             const mall=normalizeOrderNo(sciToIntString_(rawRow[idxMall]));
-            const sabang=normalizeKey(sciToIntString_(rawRow[idxSabang]));
+            const sabang=normalizeKey(sciToIntString_(rawRow[1]));
             const trk=(idxTracking!=null)?normLoose_(rawRow[idxTracking]):"";
             const ph=(idxPhone!=null)?normDigits_(rawRow[idxPhone]):"";
             if(mall) pushIndex_(orderIndexByMall,mall,compact);
@@ -584,7 +654,6 @@
             }
             rowCount++;
             const sabang=normalizeKey(sabangIdx!=null?r[sabangIdx]:"");
-            // ✅ 지수표기 처리
             const mall=normalizeOrderNo(sciToIntString_(mallIdx!=null?r[mallIdx]:""));
             const reqDate=String(r[reqDateIdx]??"").trim(), purpose=String(r[purposeIdx]??"").trim();
             const method=String(r[methodIdx]??"").trim(), colorNm=String(r[colorIdx]??"").trim();
@@ -610,32 +679,27 @@
       "옵션(수집)":"옵션(수집)","주문자명":"주문자명","비고":"비고",
     };
 
- function compactExistRow_(rawRow, headerMap){
-  const o = {};
-  // ✅ 출고 시트에서 목적=사방넷주문번호, 전산 처리 방법=쇼핑몰주문번호
-  const sabangIdx = headerMap.get("목적") ?? -1;
-  const mallIdx = headerMap.get("전산 처리 방법") ?? -1;
-
-  o["__B"] = sabangIdx >= 0 ? String(rawRow[sabangIdx] ?? "").trim() : "";
-  o["__C"] = mallIdx >= 0 ? String(rawRow[mallIdx] ?? "").trim() : "";
-  // ✅ 출고 시트 쇼핑몰: 헤더가 쇼핑몰이 아니고 요청자/F열로 들어오는 케이스까지 대응
-  const mallNameIdx = headerMap.get("쇼핑몰") ?? headerMap.get("요청자") ?? 5;
-  o["__D"] = mallNameIdx >= 0 ? String(rawRow[mallNameIdx] ?? "").trim() : "";
-  for(const h of OUTPUT_HEADERS) o[h] = "";
-  o["배송수단"] = "택배";
-
-  headerMap.forEach((colIdx, existHeader)=>{
-    const targetKey = EXIST_HEADER_MAP[existHeader];
-    if(!targetKey) return;
-    const val = String(rawRow[colIdx] ?? "").trim();
-    if(val) o[targetKey] = val;
-  });
-
-  o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
-  o["__SEP_STOCK"] = separateStockLabel_(o["상품컬러코드"]);
-  o["요청일"] = attachStockToRequestDate_(o["요청일"], o["상품컬러코드"]);
-  return o;
-}
+    function compactExistRow_(rawRow,headerMap){
+      const o={};
+      const sabangIdx=headerMap.get("목적")??-1;
+      const mallIdx=headerMap.get("전산 처리 방법")??-1;
+      o["__B"]=sabangIdx>=0?String(rawRow[sabangIdx]??"").trim():"";
+      o["__C"]=mallIdx>=0?String(rawRow[mallIdx]??"").trim():"";
+      const mallNameIdx=headerMap.get("쇼핑몰")??headerMap.get("요청자")??5;
+      o["__D"]=mallNameIdx>=0?String(rawRow[mallNameIdx]??"").trim():"";
+      for(const h of OUTPUT_HEADERS) o[h]="";
+      o["배송수단"]="택배";
+      headerMap.forEach((colIdx,existHeader)=>{
+        const targetKey=EXIST_HEADER_MAP[existHeader];
+        if(!targetKey) return;
+        const val=String(rawRow[colIdx]??"").trim();
+        if(val) o[targetKey]=val;
+      });
+      o["재고"]=stockQtyLabel_(o["상품컬러코드"]);
+      o["__SEP_STOCK"]=separateStockLabel_(o["상품컬러코드"]);
+      o["요청일"]=attachStockToRequestDate_(o["요청일"],o["상품컬러코드"]);
+      return o;
+    }
     function compactExistRowWithRaw_(rawRow,headerMap){ const o=compactExistRow_(rawRow,headerMap); o["__rawText"]=rawRow.map(v=>String(v??"").trim()).join("\t"); return o; }
 
     function parseExistAsOrderCsvStream_(csvText,sheetTag){
@@ -654,7 +718,6 @@
             }
             rowCount++; if(rawRow.every(v=>!String(v??"").trim())) return;
             const compact=compactExistRowWithRaw_(rawRow,localHeaderMap); compact.__SHEET_TAG=sheetTag;
-            // ✅ 지수표기 처리
             const mall=idxMall>=0?normalizeOrderNo(sciToIntString_(rawRow[idxMall]??"")):"";;
             const sabang=idxSabang>=0?normalizeKey(sciToIntString_(rawRow[idxSabang]??"")):"";;
             const trk=idxTracking!=null?normLoose_(rawRow[idxTracking]??""):"";
@@ -726,7 +789,6 @@
     function hideExistPanel(){ const p=$("existPanel"); if(!p) return; p.style.display="none"; $("existBody").style.display="none"; $("btnExistToggle").textContent="펼치기"; $("existTbody").innerHTML=""; }
 
     function showExistPanelByOrderNo_(orderNo){
-      // ✅ 검색어도 지수표기 변환
       const keyMall=normalizeOrderNo(sciToIntString_(orderNo));
       const rowsByMall=existIndexByMall.get(keyMall)||[];
       const sabangKeys=[];
@@ -752,7 +814,7 @@
     let lastOutRows=[], lastExistOutRows=[], lastStockTypes=[], originalOutRows=[], lastSource="none", copyBlocked_=true;
 
     function clearResult_(){
-      setPanel("manual",false); setPanel("change",false); clearStockUI(); hideExistPanel(); hideDupBanner_();
+      setPanel("manual",false); setPanel("change",false); clearStockUI(); hideExistPanel(); hideDupBanner_(); hideNoWarehouseBanner_();
       lastOutRows=[]; lastExistOutRows=[]; lastStockTypes=[]; originalOutRows=[]; lastSource="none"; copyBlocked_=true;
       updateToolbar_(); hideHoverTip_();
       $("orderResultSection").style.display="none"; $("existResultSection").style.display="none"; $("noResultWrap").style.display="block";
@@ -795,6 +857,13 @@
       html+=`</tbody></table>`; return html;
     }
 
+    // ✅ 결과 렌더 후 주희물류 없음 배너 체크
+    function checkAndShowNoWarehouseBanner_(outRows){
+      if(!outRows||outRows.length===0){ hideNoWarehouseBanner_(); return; }
+      const codes=outRows.map(o=>o["상품컬러코드"]).filter(Boolean);
+      showNoWarehouseBanner_(codes);
+    }
+
     function renderOrderTable_(outRows,stockTypes){
       lastOutRows=outRows||[]; lastStockTypes=stockTypes||[];
       const wrap=$("tableWrap"); const section=$("orderResultSection"); const cntBadge=$("orderResultCnt");
@@ -803,6 +872,7 @@
       wrap.querySelectorAll("input.rowChk").forEach(chk=>{ chk.addEventListener("change",()=>{ const tr=chk.closest("tr"); if(tr) tr.classList.toggle("is-selected",chk.checked); refreshColorDropdownByCurrentRows_(); updateToolbar_(); updateCopyGateBySelection_(); }); });
       attachCellEvents_(wrap); enableExcelLikeResize_(wrap,"order");
       refreshColorDropdownByCurrentRows_(); updateToolbar_(); updateCopyGateBySelection_();
+      checkAndShowNoWarehouseBanner_(outRows);
     }
     function renderExistTable_(outRows){
       lastExistOutRows=outRows||[];
@@ -844,7 +914,7 @@
     function getSelectedRowIndexesByDrag_(){ const wrap=$("tableWrap"); const sel=window.getSelection?.(); if(!wrap||!sel||sel.rangeCount===0) return []; const anchorNode=sel.anchorNode; const focusNode=sel.focusNode; const inWrap=(n)=>n&&(wrap===n||wrap.contains(n)); if(!inWrap(anchorNode)&&!inWrap(focusNode)) return []; const range=sel.getRangeAt(0); const rows=Array.from(wrap.querySelectorAll("tbody tr[data-idx]")); const idxs=[]; for(const tr of rows){ try{ if(range.intersectsNode(tr)){ const i=Number(tr.dataset.idx); if(!Number.isNaN(i)) idxs.push(i); } }catch{} } return Array.from(new Set(idxs)).sort((a,b)=>a-b); }
     function isTypingTarget_(el){ if(!el) return false; const tag=(el.tagName||"").toLowerCase(); if(tag==="input"&&(el.type||"").toLowerCase()==="checkbox") return false; if(tag==="input"||tag==="textarea"||tag==="select") return true; if(el.isContentEditable) return true; return false; }
     function getCopyTargetIndexes_(){ if(!lastOutRows||lastOutRows.length===0) return []; const checked=getCheckedIndexes_(); return(checked&&checked.length)?checked:lastOutRows.map((_,i)=>i); }
-    function gateCopyByTypes(types){ let out=0,low=0,na=0,ok=0; for(const t of types){ if(t==="out") out++; else if(t==="low") low++; else if(t==="na") na++; else ok++; } copyBlocked_=(out>0||low>0||na>0); }
+    function gateCopyByTypes(types){ let out=0,low=0,na=0; for(const t of types){ if(t==="out") out++; else if(t==="low") low++; else if(t==="na") na++; } copyBlocked_=(out>0||low>0||na>0); }
     function updateCopyGateBySelection_(){ if(!lastOutRows||lastOutRows.length===0){ copyBlocked_=true; return; } const idxs=getCopyTargetIndexes_(); const types=idxs.map(i=>stockStatusByColorCode(lastOutRows[i]["상품컬러코드"]).type); gateCopyByTypes(types); }
 
     async function shortcutCopy_(){
@@ -862,11 +932,7 @@
       return idxs;
     }
     function markRowsForSeparateStockCopy_(rows){
-      return rows.map(r=>{
-        const o={...r,__USE_SEPARATE_STOCK:true};
-        o["비고"] = copyCellValue_(o,{key:"비고",label:"비고"});
-        return o;
-      });
+      return rows.map(r=>{ const o={...r,__USE_SEPARATE_STOCK:true}; o["비고"]=copyCellValue_(o,{key:"비고",label:"비고"}); return o; });
     }
     async function copyWithSeparateStock_(){
       if(!lastOutRows||lastOutRows.length===0){ showToast("복사할 결과 없음"); return; }
@@ -904,7 +970,6 @@
 
     async function search(){
       const inputRaw=$("orderInput").value;
-      // ✅ 핵심 수정: 검색어에 sciToIntString_ 적용
       const qKey=normalizeKey(sciToIntString_(inputRaw));
       const qMall=normalizeOrderNo(sciToIntString_(inputRaw));
       const qLoose=normLoose_(inputRaw);
@@ -950,13 +1015,10 @@
 
     $("btnExistToggle").addEventListener("click",()=>{ const body=$("existBody"); const isOpen=body.style.display!=="none"; body.style.display=isOpen?"none":"block"; $("btnExistToggle").textContent=isOpen?"펼치기":"접기"; });
 
-    // Ctrl+C: 재고 체크 후 복사
     document.addEventListener("keydown",async(e)=>{ const key=(e.key||"").toLowerCase(); if(!e.ctrlKey||e.altKey||e.metaKey) return; if(key!=="c") return; if(isTypingTarget_(e.target)) return; if(lastOutRows&&lastOutRows.length>0){ e.preventDefault(); await shortcutCopy_(); } });
-
-    // Shift+C: 재고 경고 무시 강제 복사
     document.addEventListener("keydown",async(e)=>{ if(e.key!=="C") return; if(e.ctrlKey||e.altKey||e.metaKey) return; if(isTypingTarget_(e.target)) return; if(!lastOutRows||lastOutRows.length===0){ showToast("복사할 결과 없음"); return; } e.preventDefault(); let idxs=getCheckedIndexes_(); if(!idxs.length){ const dragIdxs=getSelectedRowIndexesByDrag_(); if(dragIdxs.length) idxs=dragIdxs; } if(!idxs.length) idxs=lastOutRows.map((_,i)=>i); const rowsToCopy=idxs.map(i=>lastOutRows[i]).filter(Boolean); await writeClipboardRows_(rowsToCopy); showToast(`⚠️ 강제 복사됨 (${rowsToCopy.length}건)`); });
 
-    function resetAll_(){ $("orderInput").value=""; $("manualColor").value=""; $("manualQty").value=""; $("changeColor").value=""; $("changeQty").value=""; const sel=$("changeColorSelect"); if(sel) sel.value=""; $("status").textContent="초기화됨"; clearStockUI(); hideExistPanel(); hideDupBanner_(); setPanel("manual",false); setPanel("change",false); lastOutRows=[]; lastExistOutRows=[]; lastStockTypes=[]; originalOutRows=[]; lastSource="none"; copyBlocked_=true; $("orderResultSection").style.display="none"; $("existResultSection").style.display="none"; $("noResultWrap").style.display="block"; $("tableWrap").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; $("existTableWrap").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; $("tableWrapFallback").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; updateToolbar_(); hideHoverTip_(); }
+    function resetAll_(){ $("orderInput").value=""; $("manualColor").value=""; $("manualQty").value=""; $("changeColor").value=""; $("changeQty").value=""; const sel=$("changeColorSelect"); if(sel) sel.value=""; $("status").textContent="초기화됨"; clearStockUI(); hideExistPanel(); hideDupBanner_(); hideNoWarehouseBanner_(); setPanel("manual",false); setPanel("change",false); lastOutRows=[]; lastExistOutRows=[]; lastStockTypes=[]; originalOutRows=[]; lastSource="none"; copyBlocked_=true; $("orderResultSection").style.display="none"; $("existResultSection").style.display="none"; $("noResultWrap").style.display="block"; $("tableWrap").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; $("existTableWrap").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; $("tableWrapFallback").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; updateToolbar_(); hideHoverTip_(); }
 
     let colWidthOverrideOrder={}, colWidthOverrideExist={};
     const COL_MIN_W=40, COL_MAX_W=600;
