@@ -586,51 +586,210 @@
     let orderIndexByMall=new Map(), orderIndexBySabang=new Map(), orderIndexByTracking=new Map(), orderIndexByPhone=new Map();
     let orderAllForRecipientScan=[];
 
-    function compactOrderRow_(rawRow,headerMap){
-      const hm=headerMap||orderHeaderMap; const o={};
-      o["__B"]=rawRow[1]??""; o["__C"]=rawRow[2]??""; o["__D"]=rawRow[3]??"";
-      for(const h of OUTPUT_HEADERS){
-        if(h==="배송수단"){ o[h]="택배"; continue; }
-        if(h==="상품명"){ o[h]=rawRow[11]||safeGetByHeader_(rawRow,h,hm)||""; continue; }
-        o[h]=safeGetByHeader_(rawRow,h,hm)||"";
+    function normalizeHeaderKey_(v){
+      return String(v ?? "")
+        .replace(/[\u200B-\u200D\uFEFF]/g, "")
+        .replace(/\n/g, "")
+        .replace(/\r/g, "")
+        .replace(/\s+/g, "")
+        .replace(/[()（）\[\]{}·:：_\-\/\\|,.]/g, "")
+        .toLowerCase()
+        .trim();
+    }
+
+    function buildOrderHeaderIndexMap_(header){
+      const map = new Map();
+
+      header.forEach((h, i) => {
+        const raw = normalizeKey(h);
+        const norm = normalizeHeaderKey_(h);
+
+        if(raw && !map.has(raw)) map.set(raw, i);
+        if(norm && !map.has(norm)) map.set(norm, i);
+      });
+
+      return map;
+    }
+
+    function getHeaderIndexAny_(hm, names, fallbackIdx = null){
+      for(const name of names){
+        const rawKey = normalizeKey(name);
+        const normKey = normalizeHeaderKey_(name);
+
+        if(hm.has(rawKey)) return hm.get(rawKey);
+        if(hm.has(normKey)) return hm.get(normKey);
       }
-      o["재고"]=stockQtyLabel_(o["상품컬러코드"]);
-      o["__SEP_STOCK"]=separateStockLabel_(o["상품컬러코드"]);
-      o["요청일"]=attachStockToRequestDate_(o["요청일"],o["상품컬러코드"]);
+
+      return fallbackIdx;
+    }
+
+    function safeGetByHeader_(row, headerName, hm){
+      const map = hm || orderHeaderMap;
+
+      const aliasMap = {
+        "요청일": ["요청일", "주문일", "주문일자", "수집일", "등록일"],
+        "수령인": ["수령인", "수취인", "받는분", "받는 분", "받는사람", "받는 사람", "수취인명"],
+        "배송수단": ["배송수단", "택배사", "배송방법"],
+        "운송장 번호": ["운송장 번호", "운송장번호", "송장번호", "송장", "택배운송장번호"],
+        "받는분연락처": ["받는분연락처", "받는 분 연락처", "수령인연락처", "수취인연락처", "전화번호", "휴대폰"],
+        "받는분 기타연락처": ["받는분 기타연락처", "기타연락처", "보조연락처"],
+        "주소": ["주소", "배송주소", "받는분주소", "받는 분 주소"],
+        "배송메세지": ["배송메세지", "배송메시지", "배송 요청사항", "배송요청사항"],
+        "상품명": ["상품명", "상품명(수집)", "상품명 수집", "주문상품명", "수집상품명", "상품컬러명(플레이엠디)", "상품컬러명"],
+        "수량": ["수량", "주문수량", "구매수량"],
+        "결제금액": ["결제금액", "금액", "판매금액", "주문금액"],
+        "큐텐(한글상품명)": ["큐텐(한글상품명)", "큐텐 한글상품명"],
+        "바코드": ["바코드"],
+        "큐텐바코드": ["큐텐바코드"],
+        "상품코드": ["상품코드", "상품 코드", "제품코드"],
+        "쇼핑몰(참고용)": ["쇼핑몰(참고용)", "쇼핑몰", "판매처", "쇼핑몰명", "몰명"],
+        "상품컬러코드": ["상품컬러코드", "상품 컬러 코드", "상품코드칼라", "상품코드칼라X", "상품코드칼라x", "SKU", "sku"],
+        "상품명(수집)": ["상품명(수집)", "상품명 수집", "수집상품명", "주문상품명"],
+        "옵션(수집)": ["옵션(수집)", "옵션 수집", "옵션", "색상", "컬러"],
+        "주문자명": ["주문자명", "주문자"],
+        "비고": ["비고", "메모"]
+      };
+
+      const aliases = aliasMap[headerName] || [headerName];
+      const idx = getHeaderIndexAny_(map, aliases, null);
+
+      if(idx === null || idx === undefined || idx < 0) return "";
+      return row[idx] ?? "";
+    }
+
+    function compactOrderRow_(rawRow, headerMap){
+      const hm = headerMap || orderHeaderMap;
+      const o = {};
+
+      const sabangIdx = getHeaderIndexAny_(hm, [
+        "사방넷주문번호",
+        "사방넷 주문번호",
+        "사방넷번호"
+      ], 1);
+
+      const mallIdx = getHeaderIndexAny_(hm, [
+        "쇼핑몰 주문번호(필수)",
+        "쇼핑몰 주문번호",
+        "쇼핑몰주문번호",
+        "주문번호"
+      ], 2);
+
+      const mallNameIdx = getHeaderIndexAny_(hm, [
+        "쇼핑몰",
+        "판매처",
+        "쇼핑몰명",
+        "몰명"
+      ], 3);
+
+      o["__B"] = sciToIntString_(rawRow[sabangIdx] ?? "");
+      o["__C"] = sciToIntString_(rawRow[mallIdx] ?? "");
+      o["__D"] = rawRow[mallNameIdx] ?? "";
+
+      for(const h of OUTPUT_HEADERS){
+        if(h === "배송수단"){
+          o[h] = "택배";
+          continue;
+        }
+
+        o[h] = safeGetByHeader_(rawRow, h, hm) || "";
+      }
+
+      o["재고"] = stockQtyLabel_(o["상품컬러코드"]);
+      o["__SEP_STOCK"] = separateStockLabel_(o["상품컬러코드"]);
+      o["요청일"] = attachStockToRequestDate_(o["요청일"], o["상품컬러코드"]);
+
       return o;
     }
 
-    function safeGetByHeader_(row,headerName,hm){ const map=hm||orderHeaderMap; const idx=map.get(headerName); if(idx==null||idx<0) return ""; return row[idx]??""; }
     function pushIndex_(map,key,item){ if(!key) return; if(!map.has(key)) map.set(key,[]); map.get(key).push(item); }
 
     function parseOrderCsvStream_(csvText){
-      return new Promise((resolve,reject)=>{
-        orderIndexByMall=new Map(); orderIndexBySabang=new Map(); orderIndexByTracking=new Map(); orderIndexByPhone=new Map();
-        orderAllForRecipientScan=[]; orderHeaderMap=new Map();
-        let idxMall=2,idxTracking=null,idxPhone=null,idxRecipient=null;
-        parseCsvStream_(csvText,{
-          onHeader:(header)=>{
-            header.forEach((h,i)=>{ if(h) orderHeaderMap.set(h,i); });
-            const m1=orderHeaderMap.get("쇼핑몰 주문번호(필수)"); const m2=orderHeaderMap.get("쇼핑몰 주문번호");
-            idxMall=(m1!=null)?m1:(m2!=null?m2:2);
-            idxTracking=orderHeaderMap.get("운송장 번호"); idxPhone=orderHeaderMap.get("받는분연락처"); idxRecipient=orderHeaderMap.get("수령인");
+      return new Promise((resolve, reject) => {
+        orderIndexByMall = new Map();
+        orderIndexBySabang = new Map();
+        orderIndexByTracking = new Map();
+        orderIndexByPhone = new Map();
+        orderAllForRecipientScan = [];
+        orderHeaderMap = new Map();
+
+        let idxMall = 2;
+        let idxSabang = 1;
+        let idxTracking = null;
+        let idxPhone = null;
+        let idxRecipient = null;
+
+        parseCsvStream_(csvText, {
+          onHeader: (header) => {
+            orderHeaderMap = buildOrderHeaderIndexMap_(header);
+
+            idxMall = getHeaderIndexAny_(orderHeaderMap, [
+              "쇼핑몰 주문번호(필수)",
+              "쇼핑몰 주문번호",
+              "쇼핑몰주문번호",
+              "주문번호"
+            ], 2);
+
+            idxSabang = getHeaderIndexAny_(orderHeaderMap, [
+              "사방넷주문번호",
+              "사방넷 주문번호",
+              "사방넷번호"
+            ], 1);
+
+            idxTracking = getHeaderIndexAny_(orderHeaderMap, [
+              "운송장 번호",
+              "운송장번호",
+              "송장번호",
+              "송장"
+            ], null);
+
+            idxPhone = getHeaderIndexAny_(orderHeaderMap, [
+              "받는분연락처",
+              "받는 분 연락처",
+              "수령인연락처",
+              "수취인연락처",
+              "전화번호",
+              "휴대폰"
+            ], null);
+
+            idxRecipient = getHeaderIndexAny_(orderHeaderMap, [
+              "수령인",
+              "수취인",
+              "받는분",
+              "받는 분",
+              "받는사람",
+              "받는 사람",
+              "수취인명"
+            ], null);
           },
-          onRow:(rawRow)=>{
-            if(!rawRow||rawRow.length<3) return;
-            const compact=compactOrderRow_(rawRow,orderHeaderMap);
-            const mall=normalizeOrderNo(sciToIntString_(rawRow[idxMall]));
-            const sabang=normalizeKey(sciToIntString_(rawRow[1]));
-            const trk=(idxTracking!=null)?normLoose_(rawRow[idxTracking]):"";
-            const ph=(idxPhone!=null)?normDigits_(rawRow[idxPhone]):"";
-            if(mall) pushIndex_(orderIndexByMall,mall,compact);
-            if(sabang) pushIndex_(orderIndexBySabang,sabang,compact);
-            if(trk) pushIndex_(orderIndexByTracking,trk,compact);
-            if(ph) pushIndex_(orderIndexByPhone,ph,compact);
-            compact.__RECIP=(idxRecipient!=null)?String(rawRow[idxRecipient]??""):String(compact["수령인"]??"");
+
+          onRow: (rawRow) => {
+            if(!rawRow || rawRow.length < 3) return;
+
+            const compact = compactOrderRow_(rawRow, orderHeaderMap);
+
+            const mall = normalizeOrderNo(sciToIntString_(rawRow[idxMall] ?? ""));
+            const sabang = normalizeKey(sciToIntString_(rawRow[idxSabang] ?? ""));
+            const trk = idxTracking != null ? normLoose_(rawRow[idxTracking] ?? "") : "";
+            const ph = idxPhone != null ? normDigits_(rawRow[idxPhone] ?? "") : "";
+
+            if(mall) pushIndex_(orderIndexByMall, mall, compact);
+            if(sabang) pushIndex_(orderIndexBySabang, sabang, compact);
+            if(trk) pushIndex_(orderIndexByTracking, trk, compact);
+            if(ph) pushIndex_(orderIndexByPhone, ph, compact);
+
+            compact.__RECIP = idxRecipient != null
+              ? String(rawRow[idxRecipient] ?? "")
+              : String(compact["수령인"] ?? "");
+
             orderAllForRecipientScan.push(compact);
           },
-          onDone:()=>{ orderLoaded=true; resolve(); },
-          onError:(e)=>reject(e)
+
+          onDone: () => {
+            orderLoaded = true;
+            resolve();
+          },
+
+          onError: (e) => reject(e)
         });
       });
     }
