@@ -309,8 +309,20 @@
     }
 
     function normalizeForContains_(s){ return normalizeKey(sciToIntString_(s)); }
-    function normColorCode(v){ return normalizeKey(v).replace(/\s+/g,"").replace(/-/g,"").toUpperCase(); }
+    function normColorCode(v){ return normalizeKey(v).replace(/\s+/g,"").replace(/[-‐‑‒–—―_]/g,"").toUpperCase(); }
     function normProductCode_(v){ return normalizeKey(v).replace(/\s+/g,"").toUpperCase(); }
+    function normWarehouse_(v){
+      return normalizeKey(v)
+        .replace(/[\s_()（）\[\]{}·:：\-‐‑‒–—―]/g, "")
+        .toLowerCase();
+    }
+    function warehouseType_(v){
+      const w=normWarehouse_(v);
+      if(!w) return "other";
+      if(w.includes("주희물류")&&w.includes("분리보관")) return "separate";
+      if(w==="주희물류"||w.includes("주희물류창고")) return "normal";
+      return "other";
+    }
     function toNumber(v){ const n=String(v??"").replace(/[^0-9.-]/g,""); return Number(n)||0; }
     function escapeHtml(str){ return String(str??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
 
@@ -534,7 +546,7 @@
 
       parseCsvStream_(csvText,{
         onHeader:(header)=>{
-          idxCode      = findHeaderIdx_(header,["상품코드칼라x","상품코드칼라","skucode","sku"],0);
+          idxCode      = findHeaderIdx_(header,["상품컬러코드","컬러코드","상품코드칼라x","상품코드칼라","상품코드컬러","skucode","sku"],0);
           idxWarehouse = findHeaderIdx_(header,["창고명","창고"],2);
           idxName      = findHeaderIdx_(header,["상품명","제품명","name"],5);
           idxColorName = findHeaderIdx_(header,["칼라명","색상명","컬러명","칼라","color"],8);
@@ -545,6 +557,7 @@
           if(!code) return;
 
           const warehouse=normalizeKey(r[idxWarehouse]);
+          const warehouseType=warehouseType_(warehouse);
           const qty=toNumber(r[idxQty]);
           const name=normalizeKey(r[idxName]);
           const colorName=normalizeKey(r[idxColorName]);
@@ -552,14 +565,14 @@
           // 시트에 등록된 전체 코드 추적
           allCodesInSheet.add(code);
 
-          if(warehouse===WAREHOUSE_JUHI_SEP){
+          if(warehouseType==="separate"){
             // 주희물류(분리보관) → separateStockMap에 누적
             separateStockMap.set(code,(separateStockMap.get(code)||0)+qty);
             // 이름 정보가 없으면 여기서라도 세팅
             if(!stockInfoMap.has(code)){
               stockInfoMap.set(code,{qty:0,separateQty:qty,name,colorName});
             }
-          } else if(warehouse===WAREHOUSE_JUHI){
+          } else if(warehouseType==="normal"){
             // 주희물류 → stockMap에 누적
             const newQty=(stockMap.get(code)||0)+qty;
             stockMap.set(code,newQty);
@@ -574,6 +587,12 @@
           // 그 외 창고는 무시
         },
         onDone:()=>{
+          // 분리보관 행이 일반 재고 행보다 뒤에 있어도 수량 정보 동기화
+          stockInfoMap.forEach((info,code)=>{
+            info.qty=stockMap.get(code)||0;
+            info.separateQty=separateStockMap.get(code)||0;
+            stockInfoMap.set(code,info);
+          });
           // 시트에는 있지만 주희물류 행이 없는 코드 파악
           allCodesInSheet.forEach(code=>{
             if(!stockMap.has(code)) noWarehouseSet.add(code);
@@ -970,11 +989,11 @@
       }
     }
 
-    let lastOutRows=[], lastExistOutRows=[], lastStockTypes=[], originalOutRows=[], lastSource="none", copyBlocked_=true;
+    let lastOutRows=[], lastExistOutRows=[], lastStockTypes=[], originalOutRows=[], lastSource="none", lastActiveTableSource="order", copyBlocked_=true;
 
     function clearResult_(){
       setPanel("manual",false); setPanel("change",false); clearStockUI(); hideExistPanel(); hideDupBanner_(); hideNoWarehouseBanner_();
-      lastOutRows=[]; lastExistOutRows=[]; lastStockTypes=[]; originalOutRows=[]; lastSource="none"; copyBlocked_=true;
+      lastOutRows=[]; lastExistOutRows=[]; lastStockTypes=[]; originalOutRows=[]; lastSource="none"; lastActiveTableSource="order"; copyBlocked_=true;
       updateToolbar_(); hideHoverTip_();
       $("orderResultSection").style.display="none"; $("existResultSection").style.display="none"; $("noResultWrap").style.display="block";
       $("tableWrap").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`;
@@ -982,7 +1001,19 @@
       $("tableWrapFallback").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`;
     }
 
-    function getCheckedIndexes_(){ const wrap=$("tableWrap"); const chks=wrap.querySelectorAll("input.rowChk:checked"); return Array.from(chks).map(c=>Number(c.dataset.idx)).filter(n=>!Number.isNaN(n)); }
+    function getCheckedIndexesByWrap_(wrapId){
+      const wrap=$(wrapId);
+      if(!wrap) return [];
+      const chks=wrap.querySelectorAll("input.rowChk:checked");
+      return Array.from(chks).map(c=>Number(c.dataset.idx)).filter(n=>!Number.isNaN(n));
+    }
+    function getCheckedIndexes_(){ return getCheckedIndexesByWrap_("tableWrap"); }
+    function getActiveCopyContext_(){
+      if(lastActiveTableSource==="exist"&&lastExistOutRows.length){
+        return {source:"exist",rows:lastExistOutRows,wrapId:"existTableWrap"};
+      }
+      return {source:"order",rows:lastOutRows,wrapId:"tableWrap"};
+    }
     function updateToolbar_(){
       const tb=$("tableToolbar"); if(!tb) return;
       const hasRows=lastOutRows&&lastOutRows.length>0; tb.style.display=hasRows?"flex":"none";
@@ -1025,11 +1056,13 @@
 
     function renderOrderTable_(outRows,stockTypes){
       lastOutRows=outRows||[]; lastStockTypes=stockTypes||[];
+      if(lastOutRows.length) lastActiveTableSource="order";
       const wrap=$("tableWrap"); const section=$("orderResultSection"); const cntBadge=$("orderResultCnt");
       if(!outRows||outRows.length===0){ section.style.display="none"; return; }
       cntBadge.textContent=`${outRows.length}건`; wrap.innerHTML=buildTableHtml_(outRows,stockTypes,"order"); section.style.display="block";
       wrap.querySelectorAll("input.rowChk").forEach(chk=>{ chk.addEventListener("change",()=>{ const tr=chk.closest("tr"); if(tr) tr.classList.toggle("is-selected",chk.checked); refreshColorDropdownByCurrentRows_(); updateToolbar_(); updateCopyGateBySelection_(); }); });
-      attachCellEvents_(wrap); enableExcelLikeResize_(wrap,"order");
+      wrap.addEventListener("mousedown",()=>{ lastActiveTableSource="order"; });
+      attachCellEvents_(wrap,"order"); enableExcelLikeResize_(wrap,"order");
       refreshColorDropdownByCurrentRows_(); updateToolbar_(); updateCopyGateBySelection_();
       checkAndShowNoWarehouseBanner_(outRows);
     }
@@ -1039,13 +1072,14 @@
       if(!outRows||outRows.length===0){ section.style.display="none"; return; }
       const stockTypes=outRows.map(o=>stockStatusByColorCode(o["상품컬러코드"]).type);
       cntBadge.textContent=`${outRows.length}건`; wrap.innerHTML=buildTableHtml_(outRows,stockTypes,"exist"); section.style.display="block";
-      wrap.querySelectorAll("input.rowChk").forEach(chk=>{ chk.addEventListener("change",()=>{ const tr=chk.closest("tr"); if(tr) tr.classList.toggle("is-selected",chk.checked); }); });
-      attachCellEvents_(wrap); enableExcelLikeResize_(wrap,"exist");
+      wrap.querySelectorAll("input.rowChk").forEach(chk=>{ chk.addEventListener("change",()=>{ lastActiveTableSource="exist"; const tr=chk.closest("tr"); if(tr) tr.classList.toggle("is-selected",chk.checked); }); });
+      wrap.addEventListener("mousedown",()=>{ lastActiveTableSource="exist"; });
+      attachCellEvents_(wrap,"exist"); enableExcelLikeResize_(wrap,"exist");
     }
 
-    function attachCellEvents_(wrap){
+    function attachCellEvents_(wrap,source="order"){
       wrap.querySelectorAll(".copy").forEach(td=>{
-        td.addEventListener("click",async()=>{ const text=(td.getAttribute("data-copy")||td.textContent||"").trim(); try{ await navigator.clipboard.writeText(text); showToast("복사됨"); }catch{ showToast("복사 실패"); } });
+        td.addEventListener("click",async()=>{ lastActiveTableSource=source; const text=(td.getAttribute("data-copy")||td.textContent||"").trim(); try{ await navigator.clipboard.writeText(text); showToast("복사됨"); }catch{ showToast("복사 실패"); } });
         td.addEventListener("mouseenter",(e)=>{ const text=(td.getAttribute("data-copy")||td.textContent||"").trim(); const t=text.length>4000?(text.slice(0,4000)+" …"):text; showHoverTip_(t,e.clientX,e.clientY); });
         td.addEventListener("mousemove",(e)=>moveHoverTip_(e.clientX,e.clientY));
         td.addEventListener("mouseleave",hideHoverTip_);
@@ -1070,18 +1104,23 @@
       catch(e){ try{ await navigator.clipboard.writeText(tsv); showToast(`복사됨 (${rowsToCopy.length}건, 서식 제외)`); }catch{ showToast("복사 실패"); } }
     }
 
-    function getSelectedRowIndexesByDrag_(){ const wrap=$("tableWrap"); const sel=window.getSelection?.(); if(!wrap||!sel||sel.rangeCount===0) return []; const anchorNode=sel.anchorNode; const focusNode=sel.focusNode; const inWrap=(n)=>n&&(wrap===n||wrap.contains(n)); if(!inWrap(anchorNode)&&!inWrap(focusNode)) return []; const range=sel.getRangeAt(0); const rows=Array.from(wrap.querySelectorAll("tbody tr[data-idx]")); const idxs=[]; for(const tr of rows){ try{ if(range.intersectsNode(tr)){ const i=Number(tr.dataset.idx); if(!Number.isNaN(i)) idxs.push(i); } }catch{} } return Array.from(new Set(idxs)).sort((a,b)=>a-b); }
+    function getSelectedRowIndexesByDrag_(wrapId="tableWrap"){ const wrap=$(wrapId); const sel=window.getSelection?.(); if(!wrap||!sel||sel.rangeCount===0) return []; const anchorNode=sel.anchorNode; const focusNode=sel.focusNode; const inWrap=(n)=>n&&(wrap===n||wrap.contains(n)); if(!inWrap(anchorNode)&&!inWrap(focusNode)) return []; const range=sel.getRangeAt(0); const rows=Array.from(wrap.querySelectorAll("tbody tr[data-idx]")); const idxs=[]; for(const tr of rows){ try{ if(range.intersectsNode(tr)){ const i=Number(tr.dataset.idx); if(!Number.isNaN(i)) idxs.push(i); } }catch{} } return Array.from(new Set(idxs)).sort((a,b)=>a-b); }
     function isTypingTarget_(el){ if(!el) return false; const tag=(el.tagName||"").toLowerCase(); if(tag==="input"&&(el.type||"").toLowerCase()==="checkbox") return false; if(tag==="input"||tag==="textarea"||tag==="select") return true; if(el.isContentEditable) return true; return false; }
     function getCopyTargetIndexes_(){ if(!lastOutRows||lastOutRows.length===0) return []; const checked=getCheckedIndexes_(); return(checked&&checked.length)?checked:lastOutRows.map((_,i)=>i); }
     function gateCopyByTypes(types){ let out=0,low=0,na=0; for(const t of types){ if(t==="out") out++; else if(t==="low") low++; else if(t==="na") na++; } copyBlocked_=(out>0||low>0||na>0); }
     function updateCopyGateBySelection_(){ if(!lastOutRows||lastOutRows.length===0){ copyBlocked_=true; return; } const idxs=getCopyTargetIndexes_(); const types=idxs.map(i=>stockStatusByColorCode(lastOutRows[i]["상품컬러코드"]).type); gateCopyByTypes(types); }
 
     async function shortcutCopy_(){
-      if(!lastOutRows||lastOutRows.length===0){ showToast("복사할 결과 없음"); return; }
-      updateCopyGateBySelection_(); if(copyBlocked_){ showToast("재고 경고로 복사 차단됨"); return; }
-      let idxs=getCheckedIndexes_(); if(!idxs.length){ const dragIdxs=getSelectedRowIndexesByDrag_(); if(dragIdxs.length) idxs=dragIdxs; }
-      if(!idxs.length){ idxs=lastOutRows.map((_,i)=>i); }
-      const rowsToCopy=idxs.map(i=>lastOutRows[i]).filter(Boolean); await writeClipboardRows_(rowsToCopy);
+      const ctx=getActiveCopyContext_();
+      if(!ctx.rows||ctx.rows.length===0){ showToast("복사할 결과 없음"); return; }
+      let idxs=getCheckedIndexesByWrap_(ctx.wrapId);
+      if(!idxs.length){ const dragIdxs=getSelectedRowIndexesByDrag_(ctx.wrapId); if(dragIdxs.length) idxs=dragIdxs; }
+      if(!idxs.length){ idxs=ctx.rows.map((_,i)=>i); }
+      const rowsToCopy=idxs.map(i=>ctx.rows[i]).filter(Boolean);
+      const types=rowsToCopy.map(o=>stockStatusByColorCode(o["상품컬러코드"]).type);
+      gateCopyByTypes(types);
+      if(copyBlocked_){ showToast("재고 경고로 복사 차단됨"); return; }
+      await writeClipboardRows_(rowsToCopy);
     }
 
     function getCopyIndexesWithDragFallback_(){
@@ -1174,10 +1213,10 @@
 
     $("btnExistToggle").addEventListener("click",()=>{ const body=$("existBody"); const isOpen=body.style.display!=="none"; body.style.display=isOpen?"none":"block"; $("btnExistToggle").textContent=isOpen?"펼치기":"접기"; });
 
-    document.addEventListener("keydown",async(e)=>{ const key=(e.key||"").toLowerCase(); if(!e.ctrlKey||e.altKey||e.metaKey) return; if(key!=="c") return; if(isTypingTarget_(e.target)) return; if(lastOutRows&&lastOutRows.length>0){ e.preventDefault(); await shortcutCopy_(); } });
+    document.addEventListener("keydown",async(e)=>{ const key=(e.key||"").toLowerCase(); if(!e.ctrlKey||e.altKey||e.metaKey) return; if(key!=="c") return; if(isTypingTarget_(e.target)) return; if((lastOutRows&&lastOutRows.length>0)||(lastExistOutRows&&lastExistOutRows.length>0)){ e.preventDefault(); await shortcutCopy_(); } });
     document.addEventListener("keydown",async(e)=>{ if(e.key!=="C") return; if(e.ctrlKey||e.altKey||e.metaKey) return; if(isTypingTarget_(e.target)) return; if(!lastOutRows||lastOutRows.length===0){ showToast("복사할 결과 없음"); return; } e.preventDefault(); let idxs=getCheckedIndexes_(); if(!idxs.length){ const dragIdxs=getSelectedRowIndexesByDrag_(); if(dragIdxs.length) idxs=dragIdxs; } if(!idxs.length) idxs=lastOutRows.map((_,i)=>i); const rowsToCopy=idxs.map(i=>lastOutRows[i]).filter(Boolean); await writeClipboardRows_(rowsToCopy); showToast(`⚠️ 강제 복사됨 (${rowsToCopy.length}건)`); });
 
-    function resetAll_(){ $("orderInput").value=""; $("manualColor").value=""; $("manualQty").value=""; $("changeColor").value=""; $("changeQty").value=""; const sel=$("changeColorSelect"); if(sel) sel.value=""; $("status").textContent="초기화됨"; clearStockUI(); hideExistPanel(); hideDupBanner_(); hideNoWarehouseBanner_(); setPanel("manual",false); setPanel("change",false); lastOutRows=[]; lastExistOutRows=[]; lastStockTypes=[]; originalOutRows=[]; lastSource="none"; copyBlocked_=true; $("orderResultSection").style.display="none"; $("existResultSection").style.display="none"; $("noResultWrap").style.display="block"; $("tableWrap").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; $("existTableWrap").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; $("tableWrapFallback").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; updateToolbar_(); hideHoverTip_(); }
+    function resetAll_(){ $("orderInput").value=""; $("manualColor").value=""; $("manualQty").value=""; $("changeColor").value=""; $("changeQty").value=""; const sel=$("changeColorSelect"); if(sel) sel.value=""; $("status").textContent="초기화됨"; clearStockUI(); hideExistPanel(); hideDupBanner_(); hideNoWarehouseBanner_(); setPanel("manual",false); setPanel("change",false); lastOutRows=[]; lastExistOutRows=[]; lastStockTypes=[]; originalOutRows=[]; lastSource="none"; lastActiveTableSource="order"; copyBlocked_=true; $("orderResultSection").style.display="none"; $("existResultSection").style.display="none"; $("noResultWrap").style.display="block"; $("tableWrap").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; $("existTableWrap").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; $("tableWrapFallback").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; updateToolbar_(); hideHoverTip_(); }
 
     let colWidthOverrideOrder={}, colWidthOverrideExist={};
     const COL_MIN_W=40, COL_MAX_W=600;
