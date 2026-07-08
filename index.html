@@ -1146,15 +1146,71 @@
     function buildOutManual(colorCode,qty){ const o={}; for(const c of EXTRA_COLS) o[c.key]=""; for(const h of OUTPUT_HEADERS) o[h]=""; o["배송수단"]="택배"; o["운송장 번호"]=""; o["상품컬러코드"]=colorCode||""; o["수량"]=qty||""; o["상품명"]=nameFromStock_(o["상품컬러코드"]); o["재고"]=stockQtyLabel_(o["상품컬러코드"]); o["__SEP_STOCK"]=separateStockLabel_(o["상품컬러코드"]); o["옵션(수집)"]=colorNameFromStock_(o["상품컬러코드"]); return o; }
     function applyManual(){ const color=normalizeKey($("manualColor").value); const qty=normalizeKey($("manualQty").value); if(!color){ showToast(""); return; } if(!stockLoaded){ showToast("재고 로딩 중…"); return; } const out=buildOutManual(color,qty); const st=stockStatusByColorCode(out["상품컬러코드"]); lastSource="manual"; originalOutRows=JSON.parse(JSON.stringify([out])); $("status").textContent="수동 입력 결과: 1건"; $("noResultWrap").style.display="none"; $("existResultSection").style.display="none"; renderOrderTable_([out],[st.type]); }
     function applyChange(){
-      if(!lastOutRows||lastOutRows.length===0){ showToast("변경할 검색 결과가 없습니다"); return; }
-      const newColor=normalizeKey($("changeColor").value); const newQty=normalizeKey($("changeQty").value);
-      if(!newColor){ showToast("변경 컬러코드를 입력해주세요"); return; }
-      let targets=[]; if(lastOutRows.length>1){ targets=getCheckedIndexes_(); if(targets.length===0){ showToast("행을 체크해주세요"); return; } } else{ targets=[0]; }
-      const targetSet=new Set(targets);
-      const updated=lastOutRows.map((o,idx)=>{ const copy={...o}; if(targetSet.has(idx)){ copy["상품컬러코드"]=newColor; if(newQty!=="") copy["수량"]=newQty; copy["상품명"]=nameFromStock_(newColor); copy["요청일"]=attachStockToRequestDate_(copy["요청일"],newColor); copy["옵션(수집)"]=colorNameFromStock_(newColor); copy["__SEP_STOCK"]=separateStockLabel_(newColor); } return copy; });
-      const types=updated.map(o=>stockStatusByColorCode(o["상품컬러코드"]).type); renderOrderTable_(updated,types); showToast(`선택 ${targets.length}건에만 적용됨`);
+      const isExist = lastActiveTableSource === "exist" && lastExistOutRows.length > 0;
+      const rows = isExist ? lastExistOutRows : lastOutRows;
+      const wrapId = isExist ? "existTableWrap" : "tableWrap";
+
+      if(!rows || rows.length===0){
+        showToast("변경할 검색 결과가 없습니다");
+        return;
+      }
+
+      const newColor = normColorCode($("changeColor").value);
+      const newQty = normalizeKey($("changeQty").value);
+      if(!newColor){
+        showToast("변경 컬러코드를 입력해주세요");
+        return;
+      }
+
+      let targets = getCheckedIndexesByWrap_(wrapId);
+      if(rows.length === 1 && targets.length === 0) targets = [0];
+      if(rows.length > 1 && targets.length === 0){
+        showToast("변경할 행을 체크해주세요");
+        return;
+      }
+
+      const targetSet = new Set(targets);
+      const updated = rows.map((o,idx)=>{
+        const copy = {...o};
+        if(targetSet.has(idx)){
+          copy["상품컬러코드"] = newColor;
+          if(newQty !== "") copy["수량"] = newQty;
+
+          const stockName = nameFromStock_(newColor);
+          const colorName = colorNameFromStock_(newColor);
+          if(stockName) copy["상품명"] = stockName;
+          copy["옵션(수집)"] = colorName || copy["옵션(수집)"] || "";
+          copy["요청일"] = attachStockToRequestDate_(copy["요청일"], newColor);
+          copy["재고"] = stockQtyLabel_(newColor);
+          copy["__SEP_STOCK"] = separateStockLabel_(newColor);
+        }
+        return copy;
+      });
+
+      if(isExist){
+        lastExistOutRows = updated;
+        renderExistTable_(updated);
+      }else{
+        lastOutRows = updated;
+        const types = updated.map(o=>stockStatusByColorCode(o["상품컬러코드"]).type);
+        renderOrderTable_(updated,types);
+      }
+
+      $("changeColor").value = newColor;
+      showToast(`선택 ${targets.length}건 변경 완료`);
     }
-    function resetChange(){ if(!originalOutRows||originalOutRows.length===0){ showToast("되돌릴 데이터가 없습니다"); return; } const restored=JSON.parse(JSON.stringify(originalOutRows)); const types=restored.map(o=>stockStatusByColorCode(o["상품컬러코드"]).type); renderOrderTable_(restored,types); showToast("변경 취소됨"); }
+
+    function resetChange(){
+      if(lastActiveTableSource === "exist"){
+        showToast("출고 시트 결과는 검색을 다시 실행하면 원본으로 돌아갑니다");
+        return;
+      }
+      if(!originalOutRows||originalOutRows.length===0){ showToast("되돌릴 데이터가 없습니다"); return; }
+      const restored=JSON.parse(JSON.stringify(originalOutRows));
+      const types=restored.map(o=>stockStatusByColorCode(o["상품컬러코드"]).type);
+      renderOrderTable_(restored,types);
+      showToast("변경 취소됨");
+    }
 
     function rowMatchesPartial_(o,qKey,qLoose,qDigits){
       if(!o) return false;
@@ -1202,8 +1258,26 @@
       const parts=[]; if(hasOrder) parts.push(`발주서 ${orderOutRows.length}건`); if(hasExist) parts.push(`출고 시트 ${existOutRows.length}건`);
       $("status").textContent=`검색 결과: ${parts.join(" / ")}`;
 
-      if(hasOrder){ lastSource="order"; const orderStockTypes=orderOutRows.map(o=>stockStatusByColorCode(o["상품컬러코드"]).type); originalOutRows=JSON.parse(JSON.stringify(orderOutRows)); renderOrderTable_(orderOutRows,orderStockTypes); setPanel("change",true); $("changeColor").value=normalizeKey(orderOutRows[0]["상품컬러코드"]||""); $("changeQty").value=normalizeKey(orderOutRows[0]["수량"]||""); refreshColorDropdownByCurrentRows_(); }
-      if(hasExist){ renderExistTable_(existOutRows); }
+      if(hasOrder){
+        lastSource="order";
+        const orderStockTypes=orderOutRows.map(o=>stockStatusByColorCode(o["상품컬러코드"]).type);
+        originalOutRows=JSON.parse(JSON.stringify(orderOutRows));
+        renderOrderTable_(orderOutRows,orderStockTypes);
+        setPanel("change",true);
+        $("changeColor").value=normColorCode(orderOutRows[0]["상품컬러코드"]||"");
+        $("changeQty").value=normalizeKey(orderOutRows[0]["수량"]||"");
+        refreshColorDropdownByCurrentRows_();
+      }
+      if(hasExist){
+        renderExistTable_(existOutRows);
+        if(!hasOrder){
+          lastActiveTableSource="exist";
+          setPanel("change",true);
+          $("changeColor").value=normColorCode(existOutRows[0]["상품컬러코드"]||"");
+          $("changeQty").value=normalizeKey(existOutRows[0]["수량"]||"");
+          rebuildColorSelectOptions_();
+        }
+      }
 
       setTimeout(()=>{
         try{ computeDupMatchesForTable_(inputRaw); renderDupBanner_(); }catch(e){ console.warn(e); }
