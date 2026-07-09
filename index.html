@@ -387,45 +387,193 @@
     function hideNoWarehouseBanner_(){ const b=$("noWarehouseBanner"); if(b) b.style.display="none"; }
 
     let colorSelectWired=false;
+
+    /**
+     * 상품컬러코드에서 공통 상품군 코드를 추출합니다.
+     * 예: GLM31Z9ZLIX → GLM31
+     *
+     * 기존에는 상품코드 전체를 startsWith로만 비교해서
+     * 상품코드에 색상·옵션 문자가 포함된 일부 품목의 드롭다운이
+     * 비어 보이는 문제가 있었습니다.
+     */
+    function getProductFamilyCode_(value){
+      const code=normColorCode(value);
+      if(!code) return "";
+
+      // 영문 + 숫자로 시작하는 일반 상품군 코드
+      // GLM31Z9ZLIX → GLM31
+      const match=code.match(/^[A-Z]+\d+/);
+      return match?match[0]:code;
+    }
+
+    /**
+     * 현재 선택 행에서 드롭다운 필터용 키를 만듭니다.
+     * - 발주서 상품코드
+     * - 현재 상품컬러코드
+     * - 상품컬러코드에서 추출한 상품군 코드
+     */
     function getAllowedProductCodesForDropdown_(){
       if(!lastOutRows||lastOutRows.length===0) return new Set();
-      let idxs=[]; if(lastOutRows.length>1){ idxs=getCheckedIndexes_(); }
+
+      let idxs=[];
+      if(lastOutRows.length>1) idxs=getCheckedIndexes_();
       if(!idxs.length) idxs=[0];
+
       const set=new Set();
-      for(const idx of idxs){ const pc=normProductCode_(lastOutRows[idx]?.["상품코드"]); if(pc) set.add(pc); }
+
+      for(const idx of idxs){
+        const row=lastOutRows[idx]||{};
+        const productCode=normProductCode_(row["상품코드"]);
+        const colorCode=normColorCode(row["상품컬러코드"]);
+        const familyFromProduct=getProductFamilyCode_(productCode);
+        const familyFromColor=getProductFamilyCode_(colorCode);
+
+        if(productCode) set.add(productCode);
+        if(colorCode) set.add(colorCode);
+        if(familyFromProduct) set.add(familyFromProduct);
+        if(familyFromColor) set.add(familyFromColor);
+      }
+
       return set;
     }
-    function rebuildColorSelectOptions_(allowedProductCodes){
-      const sel=$("changeColorSelect"); if(!sel) return;
-      const allowAll=!allowedProductCodes||allowedProductCodes.size===0;
-      sel.innerHTML=`<option value="">선택하세요</option>`;
-      const items=[];
-      stockInfoMap.forEach((info,code)=>{
-        const color=(info?.colorName||"").trim(); const label=color||"(색상명 없음)";
-        let isAllowed=true;
-        if(!allowAll){ isAllowed=Array.from(allowedProductCodes).some(pc=>String(code).startsWith(pc)); }
-        if(!isAllowed) return;
-        const st=stockStatusByColorCode(code); items.push({code,label,type:st.type});
-      });
-      items.sort((a,b)=>{ const c=a.label.localeCompare(b.label,"ko"); if(c!==0) return c; return a.code.localeCompare(b.code); });
-      const frag=document.createDocumentFragment();
-      for(const it of items){
-        const opt=document.createElement("option"); opt.value=it.code;
-        const tag=it.type==="ok"?"":it.type==="low"?" (LOW)":it.type==="out"?" (OUT)":" (N/A)";
-        opt.textContent=`${it.label}${tag}`; if(it.type!=="ok") opt.disabled=true; frag.appendChild(opt);
+
+    /**
+     * 재고 컬러코드가 현재 선택 상품과 같은 상품군인지 확인합니다.
+     */
+    function isAllowedStockColorCode_(stockColorCode,allowedProductCodes){
+      const stockCode=normColorCode(stockColorCode);
+      if(!stockCode) return false;
+
+      if(!allowedProductCodes||allowedProductCodes.size===0){
+        return true;
       }
+
+      const stockFamily=getProductFamilyCode_(stockCode);
+
+      return Array.from(allowedProductCodes).some(rawKey=>{
+        const key=normColorCode(rawKey);
+        if(!key) return false;
+
+        const keyFamily=getProductFamilyCode_(key);
+
+        return (
+          stockCode===key ||
+          stockCode.startsWith(key) ||
+          key.startsWith(stockCode) ||
+          (stockFamily&&keyFamily&&stockFamily===keyFamily)
+        );
+      });
+    }
+
+    function rebuildColorSelectOptions_(allowedProductCodes){
+      const sel=$("changeColorSelect");
+      if(!sel) return;
+
+      sel.innerHTML=`<option value="">선택하세요</option>`;
+
+      const items=[];
+
+      stockInfoMap.forEach((info,code)=>{
+        if(!isAllowedStockColorCode_(code,allowedProductCodes)) return;
+
+        const color=(info?.colorName||"").trim();
+        const label=color||"(색상명 없음)";
+        const st=stockStatusByColorCode(code);
+
+        items.push({
+          code:normColorCode(code),
+          label,
+          type:st.type,
+          qty:st.qty
+        });
+      });
+
+      items.sort((a,b)=>{
+        // 정상 재고를 먼저 표시
+        const rank={ok:0,low:1,out:2,na:3};
+        const typeCompare=(rank[a.type]??9)-(rank[b.type]??9);
+        if(typeCompare!==0) return typeCompare;
+
+        const labelCompare=a.label.localeCompare(b.label,"ko");
+        if(labelCompare!==0) return labelCompare;
+
+        return a.code.localeCompare(b.code);
+      });
+
+      const frag=document.createDocumentFragment();
+
+      for(const it of items){
+        const opt=document.createElement("option");
+        opt.value=it.code;
+
+        const tag=
+          it.type==="ok"
+            ?` (재고 ${it.qty})`
+            :it.type==="low"
+              ?` (LOW ${it.qty})`
+              :it.type==="out"
+                ?" (OUT)"
+                :" (N/A)";
+
+        opt.textContent=`${it.label}${tag}`;
+
+        // 기존 정책 유지: 정상 재고만 선택 가능
+        if(it.type!=="ok") opt.disabled=true;
+
+        frag.appendChild(opt);
+      }
+
       sel.appendChild(frag);
+
+      // 필터는 됐지만 정상 재고 옵션이 없을 때 원인 표시
+      const selectableCount=items.filter(it=>it.type==="ok").length;
+      if(selectableCount===0){
+        const opt=document.createElement("option");
+        opt.value="";
+        opt.disabled=true;
+        opt.textContent=
+          items.length>0
+            ?"선택 가능한 정상 재고 색상이 없습니다"
+            :"같은 상품군의 색상을 찾지 못했습니다";
+        sel.appendChild(opt);
+      }
     }
+
     function refreshColorDropdownByCurrentRows_(){
-      const allowed=getAllowedProductCodesForDropdown_(); rebuildColorSelectOptions_(allowed);
-      const sel=$("changeColorSelect"); const code=normColorCode($("changeColor")?.value||"");
-      const st=stockStatusByColorCode(code); if(sel) sel.value=(st.type==="ok")?code:"";
+      const allowed=getAllowedProductCodesForDropdown_();
+      rebuildColorSelectOptions_(allowed);
+
+      const sel=$("changeColorSelect");
+      const code=normColorCode($("changeColor")?.value||"");
+      const st=stockStatusByColorCode(code);
+
+      if(sel) sel.value=(st.type==="ok")?code:"";
     }
+
     function wireColorSelect_(){
       if(colorSelectWired) return;
-      const sel=$("changeColorSelect"); const input=$("changeColor"); if(!sel||!input) return;
-      sel.addEventListener("change",()=>{ const code=sel.value; if(code){ input.value=code; input.dispatchEvent(new Event("input",{bubbles:true})); } });
-      input.addEventListener("input",()=>{ const code=normColorCode(input.value); const st=stockStatusByColorCode(code); sel.value=(st.type==="ok")?code:""; });
+
+      const sel=$("changeColorSelect");
+      const input=$("changeColor");
+
+      if(!sel||!input) return;
+
+      sel.addEventListener("change",()=>{
+        const code=sel.value;
+        if(code){
+          input.value=code;
+          input.dispatchEvent(
+            new Event("input",{bubbles:true})
+          );
+        }
+      });
+
+      input.addEventListener("input",()=>{
+        const code=normColorCode(input.value);
+        const st=stockStatusByColorCode(code);
+        sel.value=(st.type==="ok")?code:"";
+      });
+
       colorSelectWired=true;
     }
 
