@@ -175,7 +175,7 @@
         </div>
         <div class="panel" id="changePanel">
           <span class="label">변경</span>
-          <div class="miniinput"><span style="font-size:11px;opacity:.75;">색상 선택</span><select id="changeColorSelect" title="색상명(I열)로 선택하면 컬러코드가 자동 입력됩니다."><option value="">선택하세요</option></select></div>
+          <div class="miniinput"><span style="font-size:11px;opacity:.75;">옵션 선택</span><select id="changeColorSelect" title="체크한 상품의 상품코드와 일치하는 옵션만 표시됩니다."><option value="">상품을 체크하세요</option></select></div>
           <div class="miniinput"><span style="font-size:11px;opacity:.75;">컬러코드</span><input id="changeColor" type="text" placeholder="예: ABC123 (필수)" /></div>
           <div class="miniinput" style="width:180px;"><span style="font-size:11px;opacity:.75;">수량</span><input id="changeQty" type="text" placeholder="예: 1" /></div>
           <button class="btn" id="btnChangeApply">적용</button>
@@ -389,99 +389,111 @@
     let colorSelectWired=false;
 
     /**
-     * 상품컬러코드에서 공통 상품군 코드를 추출합니다.
-     * 예: GLM31Z9ZLIX → GLM31
-     *
-     * 기존에는 상품코드 전체를 startsWith로만 비교해서
-     * 상품코드에 색상·옵션 문자가 포함된 일부 품목의 드롭다운이
-     * 비어 보이는 문제가 있었습니다.
+     * 체크된 발주서 행을 반환합니다.
+     * 검색 결과가 1건이면 체크하지 않아도 해당 행을 사용합니다.
      */
-    function getProductFamilyCode_(value){
-      const code=normColorCode(value);
-      if(!code) return "";
+    function getCheckedOrderRowsForDropdown_(){
+      if(!lastOutRows||lastOutRows.length===0) return [];
 
-      // 영문 + 숫자로 시작하는 일반 상품군 코드
-      // GLM31Z9ZLIX → GLM31
-      const match=code.match(/^[A-Z]+\d+/);
-      return match?match[0]:code;
+      let idxs=getCheckedIndexes_();
+
+      if(lastOutRows.length===1&&idxs.length===0){
+        idxs=[0];
+      }
+
+      return idxs
+        .map(idx=>lastOutRows[idx])
+        .filter(Boolean);
     }
 
     /**
-     * 현재 선택 행에서 드롭다운 필터용 키를 만듭니다.
-     * - 발주서 상품코드
-     * - 현재 상품컬러코드
-     * - 상품컬러코드에서 추출한 상품군 코드
+     * 체크한 행의 상품코드 목록을 가져옵니다.
      */
-    function getAllowedProductCodesForDropdown_(){
-      if(!lastOutRows||lastOutRows.length===0) return new Set();
+    function getCheckedProductCodesForDropdown_(){
+      const rows=getCheckedOrderRowsForDropdown_();
+      const codes=new Set();
 
-      let idxs=[];
-      if(lastOutRows.length>1) idxs=getCheckedIndexes_();
-      if(!idxs.length) idxs=[0];
-
-      const set=new Set();
-
-      for(const idx of idxs){
-        const row=lastOutRows[idx]||{};
-        const productCode=normProductCode_(row["상품코드"]);
-        const colorCode=normColorCode(row["상품컬러코드"]);
-        const familyFromProduct=getProductFamilyCode_(productCode);
-        const familyFromColor=getProductFamilyCode_(colorCode);
-
-        if(productCode) set.add(productCode);
-        if(colorCode) set.add(colorCode);
-        if(familyFromProduct) set.add(familyFromProduct);
-        if(familyFromColor) set.add(familyFromColor);
-      }
-
-      return set;
-    }
-
-    /**
-     * 재고 컬러코드가 현재 선택 상품과 같은 상품군인지 확인합니다.
-     */
-    function isAllowedStockColorCode_(stockColorCode,allowedProductCodes){
-      const stockCode=normColorCode(stockColorCode);
-      if(!stockCode) return false;
-
-      if(!allowedProductCodes||allowedProductCodes.size===0){
-        return true;
-      }
-
-      const stockFamily=getProductFamilyCode_(stockCode);
-
-      return Array.from(allowedProductCodes).some(rawKey=>{
-        const key=normColorCode(rawKey);
-        if(!key) return false;
-
-        const keyFamily=getProductFamilyCode_(key);
-
-        return (
-          stockCode===key ||
-          stockCode.startsWith(key) ||
-          key.startsWith(stockCode) ||
-          (stockFamily&&keyFamily&&stockFamily===keyFamily)
-        );
+      rows.forEach(row=>{
+        const productCode=normProductCode_(row?.["상품코드"]);
+        if(productCode) codes.add(productCode);
       });
+
+      return codes;
     }
 
-    function rebuildColorSelectOptions_(allowedProductCodes){
+    /**
+     * 재고 행이 체크한 상품코드와 같은 상품인지 확인합니다.
+     * 1순위: 재고 시트의 상품코드와 정확히 일치
+     * 2순위: 재고 시트에 상품코드 열이 없을 때 컬러코드 접두어로 보조 비교
+     */
+    function stockOptionMatchesProductCode_(stockColorCode,info,productCode){
+      const wanted=normProductCode_(productCode);
+      if(!wanted) return false;
+
+      const stockProductCode=normProductCode_(info?.productCode||"");
+
+      if(stockProductCode){
+        return stockProductCode===wanted;
+      }
+
+      const stockCode=normColorCode(stockColorCode);
+      return stockCode.startsWith(wanted);
+    }
+
+    /**
+     * 체크한 상품의 상품코드에 해당하는 옵션만 드롭다운에 표시합니다.
+     * 서로 다른 상품코드가 동시에 체크되면 드롭다운을 잠급니다.
+     */
+    function rebuildColorSelectOptions_(productCodes){
       const sel=$("changeColorSelect");
       if(!sel) return;
 
-      sel.innerHTML=`<option value="">선택하세요</option>`;
+      sel.innerHTML="";
+      sel.disabled=false;
+
+      const codes=productCodes instanceof Set
+        ?Array.from(productCodes)
+        :Array.isArray(productCodes)
+          ?productCodes
+          :[];
+
+      if(codes.length===0){
+        const opt=document.createElement("option");
+        opt.value="";
+        opt.textContent="변경할 상품을 체크하세요";
+        sel.appendChild(opt);
+        sel.disabled=true;
+        return;
+      }
+
+      if(codes.length>1){
+        const opt=document.createElement("option");
+        opt.value="";
+        opt.textContent="서로 다른 상품코드가 선택되었습니다";
+        sel.appendChild(opt);
+        sel.disabled=true;
+        return;
+      }
+
+      const productCode=codes[0];
+
+      const first=document.createElement("option");
+      first.value="";
+      first.textContent=`${productCode} 옵션 선택`;
+      sel.appendChild(first);
 
       const items=[];
 
-      stockInfoMap.forEach((info,code)=>{
-        if(!isAllowedStockColorCode_(code,allowedProductCodes)) return;
+      stockInfoMap.forEach((info,colorCode)=>{
+        if(!stockOptionMatchesProductCode_(colorCode,info,productCode)) return;
 
-        const color=(info?.colorName||"").trim();
-        const label=color||"(색상명 없음)";
-        const st=stockStatusByColorCode(code);
+        const normalizedColorCode=normColorCode(colorCode);
+        const colorName=(info?.colorName||"").trim();
+        const label=colorName||"(옵션명 없음)";
+        const st=stockStatusByColorCode(normalizedColorCode);
 
         items.push({
-          code:normColorCode(code),
+          code:normalizedColorCode,
           label,
           type:st.type,
           qty:st.qty
@@ -489,65 +501,84 @@
       });
 
       items.sort((a,b)=>{
-        // 정상 재고를 먼저 표시
         const rank={ok:0,low:1,out:2,na:3};
-        const typeCompare=(rank[a.type]??9)-(rank[b.type]??9);
-        if(typeCompare!==0) return typeCompare;
+        const typeDiff=(rank[a.type]??9)-(rank[b.type]??9);
+        if(typeDiff!==0) return typeDiff;
 
-        const labelCompare=a.label.localeCompare(b.label,"ko");
-        if(labelCompare!==0) return labelCompare;
+        const labelDiff=a.label.localeCompare(b.label,"ko");
+        if(labelDiff!==0) return labelDiff;
 
         return a.code.localeCompare(b.code);
       });
 
-      const frag=document.createDocumentFragment();
-
-      for(const it of items){
-        const opt=document.createElement("option");
-        opt.value=it.code;
-
-        const tag=
-          it.type==="ok"
-            ?` (재고 ${it.qty})`
-            :it.type==="low"
-              ?` (LOW ${it.qty})`
-              :it.type==="out"
-                ?" (OUT)"
-                :" (N/A)";
-
-        opt.textContent=`${it.label}${tag}`;
-
-        // 기존 정책 유지: 정상 재고만 선택 가능
-        if(it.type!=="ok") opt.disabled=true;
-
-        frag.appendChild(opt);
-      }
-
-      sel.appendChild(frag);
-
-      // 필터는 됐지만 정상 재고 옵션이 없을 때 원인 표시
-      const selectableCount=items.filter(it=>it.type==="ok").length;
-      if(selectableCount===0){
+      if(items.length===0){
         const opt=document.createElement("option");
         opt.value="";
+        opt.textContent=`${productCode}에 등록된 옵션이 없습니다`;
         opt.disabled=true;
-        opt.textContent=
-          items.length>0
-            ?"선택 가능한 정상 재고 색상이 없습니다"
-            :"같은 상품군의 색상을 찾지 못했습니다";
         sel.appendChild(opt);
+        return;
       }
+
+      const frag=document.createDocumentFragment();
+
+      items.forEach(item=>{
+        const opt=document.createElement("option");
+        opt.value=item.code;
+
+        const stockText=
+          item.type==="ok"
+            ?`재고 ${item.qty}`
+            :item.type==="low"
+              ?`LOW ${item.qty}`
+              :item.type==="out"
+                ?"품절"
+                :"재고 미등록";
+
+        opt.textContent=`${item.label} · ${item.code} · ${stockText}`;
+
+        // 기존 정책 유지: 정상 재고만 선택 가능
+        if(item.type!=="ok") opt.disabled=true;
+
+        frag.appendChild(opt);
+      });
+
+      sel.appendChild(frag);
     }
 
+    /**
+     * 체크 상태에 맞춰 컬러코드·수량·옵션 드롭다운을 동기화합니다.
+     */
     function refreshColorDropdownByCurrentRows_(){
-      const allowed=getAllowedProductCodesForDropdown_();
-      rebuildColorSelectOptions_(allowed);
+      const checkedRows=getCheckedOrderRowsForDropdown_();
+      const productCodes=getCheckedProductCodesForDropdown_();
+
+      rebuildColorSelectOptions_(productCodes);
 
       const sel=$("changeColorSelect");
-      const code=normColorCode($("changeColor")?.value||"");
-      const st=stockStatusByColorCode(code);
+      const colorInput=$("changeColor");
+      const qtyInput=$("changeQty");
 
-      if(sel) sel.value=(st.type==="ok")?code:"";
+      if(checkedRows.length===1){
+        const row=checkedRows[0];
+        const currentColor=normColorCode(row?.["상품컬러코드"]||"");
+
+        if(colorInput) colorInput.value=currentColor;
+        if(qtyInput) qtyInput.value=normalizeKey(row?.["수량"]||"");
+
+        if(sel&&!sel.disabled){
+          const hasCurrentOption=Array.from(sel.options)
+            .some(opt=>opt.value===currentColor&&!opt.disabled);
+          sel.value=hasCurrentOption?currentColor:"";
+        }
+        return;
+      }
+
+      // 같은 상품 여러 행 선택 시에는 옵션만 보여주고 직접 선택하게 합니다.
+      if(checkedRows.length>1){
+        if(colorInput) colorInput.value="";
+        if(sel&&!sel.disabled) sel.value="";
+      }
     }
 
     function wireColorSelect_(){
@@ -570,8 +601,12 @@
 
       input.addEventListener("input",()=>{
         const code=normColorCode(input.value);
-        const st=stockStatusByColorCode(code);
-        sel.value=(st.type==="ok")?code:"";
+
+        if(!sel.disabled){
+          const option=Array.from(sel.options)
+            .find(opt=>opt.value===code&&!opt.disabled);
+          sel.value=option?code:"";
+        }
       });
 
       colorSelectWired=true;
@@ -690,11 +725,12 @@
       // allCodesInSheet: 시트에 등록은 됐지만 주희물류 행이 없는 코드 파악용
       const allCodesInSheet=new Set();
 
-      let idxCode=0, idxWarehouse=2, idxName=5, idxColorName=8, idxQty=10;
+      let idxCode=0, idxProductCode=-1, idxWarehouse=2, idxName=5, idxColorName=8, idxQty=10;
 
       parseCsvStream_(csvText,{
         onHeader:(header)=>{
           idxCode      = findHeaderIdx_(header,["상품컬러코드","컬러코드","상품코드칼라x","상품코드칼라","상품코드컬러","skucode","sku"],0);
+          idxProductCode = findHeaderIdx_(header,["상품코드","제품코드","모델코드","품번","productcode","stylecode"],-1);
           idxWarehouse = findHeaderIdx_(header,["창고명","창고"],2);
           idxName      = findHeaderIdx_(header,["상품명","제품명","name"],5);
           idxColorName = findHeaderIdx_(header,["칼라명","색상명","컬러명","칼라","color"],8);
@@ -704,6 +740,9 @@
           const code=normColorCode(r[idxCode]);
           if(!code) return;
 
+          const productCode=idxProductCode>=0
+            ?normProductCode_(r[idxProductCode])
+            :"";
           const warehouse=normalizeKey(r[idxWarehouse]);
           const warehouseType=warehouseType_(warehouse);
           const qty=toNumber(r[idxQty]);
@@ -718,7 +757,7 @@
             separateStockMap.set(code,(separateStockMap.get(code)||0)+qty);
             // 이름 정보가 없으면 여기서라도 세팅
             if(!stockInfoMap.has(code)){
-              stockInfoMap.set(code,{qty:0,separateQty:qty,name,colorName});
+              stockInfoMap.set(code,{qty:0,separateQty:qty,name,colorName,productCode});
             }
           } else if(warehouseType==="normal"){
             // 주희물류 → stockMap에 누적
@@ -729,7 +768,8 @@
               qty:newQty,
               separateQty:separateStockMap.get(code)||0,
               name,
-              colorName
+              colorName,
+              productCode
             });
           }
           // 그 외 창고는 무시
@@ -1317,6 +1357,30 @@
         return;
       }
 
+      const selectedProductCodes=new Set(
+        targets
+          .map(idx=>normProductCode_(rows[idx]?.["상품코드"]))
+          .filter(Boolean)
+      );
+
+      if(selectedProductCodes.size===0){
+        showToast("선택한 행에서 상품코드를 찾을 수 없습니다");
+        return;
+      }
+
+      if(selectedProductCodes.size>1){
+        showToast("같은 상품코드끼리만 선택해주세요");
+        return;
+      }
+
+      const selectedProductCode=Array.from(selectedProductCodes)[0];
+      const selectedStockInfo=stockInfoMap.get(newColor);
+
+      if(!stockOptionMatchesProductCode_(newColor,selectedStockInfo,selectedProductCode)){
+        showToast("선택한 상품에 속하지 않는 옵션입니다");
+        return;
+      }
+
       const targetSet = new Set(targets);
       const updated = rows.map((o,idx)=>{
         const copy = {...o};
@@ -1412,8 +1476,13 @@
         originalOutRows=JSON.parse(JSON.stringify(orderOutRows));
         renderOrderTable_(orderOutRows,orderStockTypes);
         setPanel("change",true);
-        $("changeColor").value=normColorCode(orderOutRows[0]["상품컬러코드"]||"");
-        $("changeQty").value=normalizeKey(orderOutRows[0]["수량"]||"");
+        if(orderOutRows.length===1){
+          $("changeColor").value=normColorCode(orderOutRows[0]["상품컬러코드"]||"");
+          $("changeQty").value=normalizeKey(orderOutRows[0]["수량"]||"");
+        }else{
+          $("changeColor").value="";
+          $("changeQty").value="";
+        }
         refreshColorDropdownByCurrentRows_();
       }
       if(hasExist){
@@ -1438,7 +1507,7 @@
     document.addEventListener("keydown",async(e)=>{ const key=(e.key||"").toLowerCase(); if(!e.ctrlKey||e.altKey||e.metaKey) return; if(key!=="c") return; if(isTypingTarget_(e.target)) return; if((lastOutRows&&lastOutRows.length>0)||(lastExistOutRows&&lastExistOutRows.length>0)){ e.preventDefault(); await shortcutCopy_(); } });
     document.addEventListener("keydown",async(e)=>{ if(e.key!=="C") return; if(e.ctrlKey||e.altKey||e.metaKey) return; if(isTypingTarget_(e.target)) return; if(!lastOutRows||lastOutRows.length===0){ showToast("복사할 결과 없음"); return; } e.preventDefault(); let idxs=getCheckedIndexes_(); if(!idxs.length){ const dragIdxs=getSelectedRowIndexesByDrag_(); if(dragIdxs.length) idxs=dragIdxs; } if(!idxs.length) idxs=lastOutRows.map((_,i)=>i); const rowsToCopy=idxs.map(i=>lastOutRows[i]).filter(Boolean); await writeClipboardRows_(rowsToCopy); showToast(`⚠️ 강제 복사됨 (${rowsToCopy.length}건)`); });
 
-    function resetAll_(){ $("orderInput").value=""; $("manualColor").value=""; $("manualQty").value=""; $("changeColor").value=""; $("changeQty").value=""; const sel=$("changeColorSelect"); if(sel) sel.value=""; $("status").textContent="초기화됨"; clearStockUI(); hideExistPanel(); hideDupBanner_(); hideNoWarehouseBanner_(); setPanel("manual",false); setPanel("change",false); lastOutRows=[]; lastExistOutRows=[]; lastStockTypes=[]; originalOutRows=[]; lastSource="none"; lastActiveTableSource="order"; copyBlocked_=true; $("orderResultSection").style.display="none"; $("existResultSection").style.display="none"; $("noResultWrap").style.display="block"; $("tableWrap").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; $("existTableWrap").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; $("tableWrapFallback").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; updateToolbar_(); hideHoverTip_(); }
+    function resetAll_(){ $("orderInput").value=""; $("manualColor").value=""; $("manualQty").value=""; $("changeColor").value=""; $("changeQty").value=""; const sel=$("changeColorSelect"); if(sel){ sel.innerHTML=`<option value="">상품을 체크하세요</option>`; sel.disabled=true; } $("status").textContent="초기화됨"; clearStockUI(); hideExistPanel(); hideDupBanner_(); hideNoWarehouseBanner_(); setPanel("manual",false); setPanel("change",false); lastOutRows=[]; lastExistOutRows=[]; lastStockTypes=[]; originalOutRows=[]; lastSource="none"; lastActiveTableSource="order"; copyBlocked_=true; $("orderResultSection").style.display="none"; $("existResultSection").style.display="none"; $("noResultWrap").style.display="block"; $("tableWrap").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; $("existTableWrap").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; $("tableWrapFallback").innerHTML=`<div class="no-data">검색 결과가 없습니다.</div>`; updateToolbar_(); hideHoverTip_(); }
 
     let colWidthOverrideOrder={}, colWidthOverrideExist={};
     const COL_MIN_W=40, COL_MAX_W=600;
